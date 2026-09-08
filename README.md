@@ -4,7 +4,7 @@
 
 <h1 align="center">KeyCut</h1>
 
-<p align="center"><b>Fast lossless video trimmer and splicer</b></p>
+<p align="center"><b>Fast lossless video editor</b></p>
 
 <p align="center">
   <a href="https://github.com/wdmcourses/KeyCut/releases"><img alt="Releases" src="https://img.shields.io/github/v/release/wdmcourses/KeyCut?style=flat-square&label=Release"></a>
