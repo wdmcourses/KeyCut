@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://webdesign-master.ru"><img src="assets/icon.png" width="96" height="96" alt="KeyCut" /></a>
+  <a href="https://wdmcourses.github.io/keycut/"><img src="assets/icon.png" width="96" height="96" alt="KeyCut" /></a>
 </p>
 
 <h1 align="center">KeyCut</h1>
