@@ -502,6 +502,31 @@ app.whenReady().then(async () => {
   const pbAdj = await js(`window.__app.state.cursor`);
   check('prev block returns to start', near(pbAdj, 0));
 
+  console.log('[29] merge undo/redo');
+  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys(); window.__app.timeline.selectedIndex = null;`);
+  await js(`window.__app.timeline.selectedIndex = null; window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut();`);
+  await js(`window.__app.timeline.selected = [1, 2]; window.__app.mergeSelected();`);
+  const mCuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  check('V merges [1,2] -> cuts [0,k1,10]', mCuts.length === 3 && near(mCuts[1], k1));
+  await sendCtrl('KeyZ', 'z');
+  const mUndo = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  check('undo merge -> split restored', mUndo.length === 4 && near(mUndo[1], k1) && near(mUndo[2], k2));
+  await sendCtrl('KeyZ', 'z', true);
+  const mRedo = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  check('redo merge -> re-merges', mRedo.length === 3 && near(mRedo[1], k1));
+  await sendCtrl('KeyZ', 'z', true); 
+  await sendCtrl('KeyZ', 'z');
+  const mUndo2 = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  check('undo after redo keeps split state', mUndo2.length === 4 && near(mUndo2[1], k1));
+
+  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys(); window.__app.timeline.selectedIndex = null;`);
+  await js(`window.__app.timeline.selectedIndex = null; window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut();`);
+  await js(`window.__app.timeline.selected = [1, 2]; window.__app.mergeSelected();`);
+  await js(`window.__app.cancelSkipMute(); window.__app.seekTo(${k1} + (${DUR} - ${k1}) / 2); window.__app.cut();`);
+  await sendCtrl('KeyZ', 'z');
+  const seqUndo = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  check('merge then cut -> undo restores merged state', seqUndo.length === 3 && near(seqUndo[1], k1));
+
   win.destroy();
   console.log('\nRESULT:', pass, 'passed,', fail, 'failed');
   app.exit(fail ? 1 : 0);

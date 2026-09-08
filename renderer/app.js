@@ -191,9 +191,9 @@ class EditorModel {
     if (a === b) return false;
     const st = this.deleted[a];
     for (let i = a + 1; i <= b; i++) if (this.deleted[i] !== st) return false;
-    this.snapshot();
     this.cuts.splice(a + 1, b - a);
     this.deleted.splice(a, b - a + 1, st);
+    this.snapshot();
     return true;
   }
 
