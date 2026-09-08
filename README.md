@@ -43,7 +43,7 @@ output keeps the original quality and the whole operation is fast.</p>
 | Ctrl+O / Ctrl+S | Open / save project |
 | Ctrl+E | Export |
 
-## Download
+## Getting started
 
 Builds are published on the [Releases](https://github.com/wdmcourses/KeyCut/releases)
 page. Download the archive, extract and run `KeyCut`.
