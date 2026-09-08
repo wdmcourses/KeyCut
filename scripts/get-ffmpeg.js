@@ -1,6 +1,8 @@
-// Downloads a static ffmpeg binary into ./vendor/ffmpeg/ for the current
-// platform. The portable build embeds it flat into resources/ (LosslessCut
-// style). Run: node scripts/get-ffmpeg.js (npm run ffmpeg)
+// Downloads a static ffmpeg binary for a target platform into
+// ./vendor/ffmpeg/<platform>/. The portable build embeds it flat into
+// resources/ (LosslessCut style). Run:
+//   node scripts/get-ffmpeg.js              # current platform
+//   node scripts/get-ffmpeg.js --platform=linux|win32|darwin
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -10,13 +12,33 @@ const OUT_DIR = path.join(ROOT, 'vendor', 'ffmpeg');
 const TMP_ZIP = path.join(ROOT, 'vendor', 'ffmpeg-download.zip');
 const TMP_EXTRACT = path.join(ROOT, 'vendor', '.ffmpeg-extract');
 
-const binName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
-const dest = path.join(OUT_DIR, binName);
+// BtbN static builds for Windows; johnvansickle for Linux; evermeet for macOS
+// (x86_64; runs via Rosetta on Apple Silicon).
+const PLATFORMS = {
+  win32: {
+    url: 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
+    bin: 'ffmpeg.exe', kind: 'zip'
+  },
+  linux: {
+    url: 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz',
+    bin: 'ffmpeg', kind: 'xz'
+  },
+  darwin: {
+    url: 'https://evermeet.cx/ffmpeg/getrelease/zip',
+    bin: 'ffmpeg', kind: 'zip'
+  }
+};
 
-function downloadUrl() {
-  // Windows: BtbN static GPL build on GitHub (reliable CDN). Other platforms
-  // are not wired up yet - see below.
-  return 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip';
+function targetPlatform() {
+  const arg = process.argv.find((a) => a.startsWith('--platform='));
+  if (arg) {
+    const p = arg.split('=')[1];
+    if (!PLATFORMS[p]) throw new Error('Unknown platform: ' + p + ' (use win32|linux|darwin)');
+    return p;
+  }
+  const p = process.platform;
+  if (!PLATFORMS[p]) throw new Error('Unsupported host platform: ' + p);
+  return p;
 }
 
 async function download(url, outFile) {
@@ -29,26 +51,30 @@ async function download(url, outFile) {
 }
 
 async function main() {
-  if (process.platform !== 'win32') {
-    console.error(
-      'Auto-download is only implemented for Windows for now.\n' +
-      'For this platform, drop a static ffmpeg binary at ' + dest + ' and re-run.'
-    );
-    process.exit(1);
+  const platform = targetPlatform();
+  const cfg = PLATFORMS[platform];
+  const outDir = path.join(OUT_DIR, platform);
+  const dest = path.join(outDir, cfg.bin);
+  if (fs.existsSync(dest)) {
+    console.log('ffmpeg already present:', dest);
+    return;
   }
 
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-
+  fs.mkdirSync(outDir, { recursive: true });
   try {
-    await download(downloadUrl(), TMP_ZIP);
+    await download(cfg.url, TMP_ZIP);
 
     fs.rmSync(TMP_EXTRACT, { recursive: true, force: true });
     fs.mkdirSync(TMP_EXTRACT, { recursive: true });
 
-    // bsdtar handles zip (Windows 10+ ships tar.exe); fall back to PowerShell.
     let extracted = false;
     try {
-      execFileSync('tar', ['-xf', TMP_ZIP, '-C', TMP_EXTRACT], { stdio: 'ignore' });
+      // bsdtar on Windows rejects drive-letter paths (it reads "C:" as a URL
+      // scheme), so run it from ROOT with relative paths.
+      const args = cfg.kind === 'xz'
+        ? ['-xJf', path.relative(ROOT, TMP_ZIP), '-C', path.relative(ROOT, TMP_EXTRACT)]
+        : ['-xf', path.relative(ROOT, TMP_ZIP), '-C', path.relative(ROOT, TMP_EXTRACT)];
+      execFileSync('tar', args, { cwd: ROOT, stdio: 'ignore' });
       extracted = true;
     } catch {
       try {
@@ -67,11 +93,11 @@ async function main() {
         const p = path.join(dir, e);
         const st = fs.statSync(p);
         if (st.isDirectory()) walk(p);
-        else if (e === binName) found.push(p);
+        else if (e === cfg.bin) found.push(p);
       }
     })(TMP_EXTRACT);
 
-    if (!found.length) throw new Error(binName + ' not found in the archive');
+    if (!found.length) throw new Error(cfg.bin + ' not found in the archive');
     fs.copyFileSync(found[0], dest);
     process.stdout.write('Installed ' + dest + '\n');
   } finally {

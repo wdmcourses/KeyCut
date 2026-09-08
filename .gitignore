@@ -4,4 +4,5 @@ userData/
 tmp/
 vendor/ffmpeg/
 vendor/rcedit/
+vendor/electron-builds/
 *.log
