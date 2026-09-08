@@ -11,9 +11,9 @@
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
 </p>
 
-KeyCut is a video editor that cuts and joins videos without re-encoding.
+<p align="center">KeyCut is a video editor that cuts and joins videos without re-encoding.
 It splits video at keyframes and splices the kept parts back together, so the
-output keeps the original quality and the whole operation is fast.
+output keeps the original quality and the whole operation is fast.</p>
 
 <p align="center">
   <img src="keycut.png" width="82%" alt="KeyCut screenshot" />
