@@ -122,7 +122,8 @@ async function ffmpegFor(platform) {
 async function main() {
   const { platform, arch } = target();
   const cfg = PLATFORMS[platform];
-  const DIST = path.join(ROOT, 'dist', 'KeyCut-' + platform + '-' + arch);
+  const friendly = platform === 'win32' ? 'win' : platform === 'darwin' ? 'mac' : platform;
+  const DIST = path.join(ROOT, 'dist', 'KeyCut-' + friendly + '-' + arch);
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(DIST, { recursive: true });
 
@@ -190,7 +191,7 @@ async function main() {
   }
 
   // archive
-  const label = 'KeyCut-' + platform + '-' + arch;
+  const label = path.basename(DIST);
   const cwd = path.join(ROOT, 'dist');
   if (cfg.archive === 'zip') {
     execFileSync('tar', ['-a', '-c', '-f', label + '.zip', label], { cwd, stdio: 'inherit' });
