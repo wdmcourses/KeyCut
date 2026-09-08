@@ -1,72 +1,68 @@
-# KeyCut
+<p align="center">
+  <img src="assets/icon.png" width="96" height="96" alt="KeyCut" />
+</p>
 
-**Fast lossless video trimmer and splicer.** Cut lectures, recordings and long
-videos on the fly — no re-encoding, no quality loss. A lightweight, focused
-alternative to GUI lossless cutters, built on FFmpeg.
+<h1 align="center">KeyCut</h1>
 
-![KeyCut](keycut.png)
+<p align="center"><b>Fast lossless video trimmer and splicer</b></p>
 
-## Why KeyCut?
+<p align="center">
+  <a href="https://github.com/wdmcourses/KeyCut/releases"><img alt="Releases" src="https://img.shields.io/github/v/release/wdmcourses/KeyCut?style=flat-square&label=Release"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
+</p>
 
-- **100% lossless** — segments are cut and spliced with stream copy only. The
-  video is never re-encoded, so you get bit-perfect output in seconds.
-- **Keyframe-aware** — cuts snap to real keyframes of the file (parsed directly
-  from the container, no grid assumptions), so splices are clean and exact.
-- **Fast** — the whole 10-hour lecture probes in under a second; rendering
-  streams with FFmpeg copy, not transcode.
-- **Eats most formats** — MP4, MOV, MKV, WebM, AVI, TS/M2TS, FLV and more
-  (anything FFmpeg demuxes), via the bundled static FFmpeg.
-- **Portable** — a single executable with FFmpeg and everything bundled, ready
-  to run from a USB stick.
+KeyCut is a video editor that cuts and joins videos without re-encoding.
+It splits video at keyframes and splices the kept parts back together with
+FFmpeg stream copy, so the output keeps the original quality and the whole
+operation is fast.
 
-## How it works
+<p align="center">
+  <img src="keycut.png" width="85%" alt="KeyCut screenshot" />
+</p>
 
-1. **Open** a video — keyframes are read instantly and shown on the timeline.
-2. **Edit** — split (`C`), dim out (delete) what you don't want (`X`), restore
-   (`R`), merge adjacent blocks back (`V`), drag block boundaries to resize.
-3. **Export** — the kept segments are cut and spliced losslessly.
+## Features
 
-## Editing
+- Lossless cutting and splicing, no re-encoding, no quality loss
+- Split, delete, restore and merge segments directly on the timeline
+- Export the kept segments as a single file
+- Reads most container formats: MP4, MOV, MKV, WebM, AVI, TS/M2TS, FLV and more
+- Portable single-executable build with FFmpeg bundled
+
+## Keyboard
 
 | Keys | Action |
 | --- | --- |
-| `Space` | Play / pause |
-| `S` / `F` | Previous / next keyframe (hold to scan) |
-| `C` | Cut at the caret (snapped to the nearest keyframe) |
-| `X` | Dim selected segment(s) (excluded from export) |
-| `R` | Restore dimmed segment(s) |
-| `V` | Merge adjacent selected blocks into one |
-| `Alt` + click | Multi-select segments |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
-| `Ctrl+E` | Export |
-| `Ctrl+O` / `Ctrl+S` | Open / save project |
-
-- Drag a **block edge** to extend a kept segment into an adjacent dimmed one.
-- Drag the **scrollbar thumb** to pan, its **edges** to zoom.
-- `Ctrl` + wheel zooms around the cursor; plain wheel pans.
-- The playhead always stays in view while playing.
+| Space | Play / pause |
+| S / F | Previous / next keyframe |
+| C | Cut at the caret |
+| X / R | Delete / restore segment |
+| V | Merge segments |
+| Alt + click | Multi-select segments |
+| Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
+| Ctrl+O / Ctrl+S | Open / save project |
+| Ctrl+E | Export |
 
 ## Download
 
-Grab the portable build from the [Releases](https://github.com/wdmcourses/KeyCut/releases)
-page — download, unzip, run `KeyCut.exe`.
+Builds are published on the [Releases](https://github.com/wdmcourses/KeyCut/releases)
+page. Download the archive, extract and run `KeyCut.exe`.
 
 ## Building from source
 
 ```bash
 npm install
-npm run ffmpeg      # downloads the static FFmpeg build into vendor/
-npm run pack        # builds the portable app into dist/KeyCut
+npm run ffmpeg   # downloads the static FFmpeg build
+npm run pack     # produces the portable build in dist/KeyCut
 ```
 
 Run the tests:
 
 ```bash
 npm test            # renderer tests
-npm run test:keys   # editing / playback logic
-npm run test:scroll # timeline & scrollbar
+npm run test:keys   # editing and playback logic
+npm run test:scroll # timeline and scrollbar tests
 ```
 
 ## License
 
-MIT
+[MIT](LICENSE)
