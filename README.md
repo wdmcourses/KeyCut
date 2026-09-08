@@ -43,16 +43,25 @@ output keeps the original quality and the whole operation is fast.</p>
 | Ctrl+O / Ctrl+S | Open / save project |
 | Ctrl+E | Export |
 
+## Download
+
+Builds are published on the [Releases](https://github.com/wdmcourses/KeyCut/releases)
+page. Download the archive, extract and run `KeyCut`.
+
+### Platform notes
+
+- **Linux:** run this once in the extracted folder, or the app aborts on the Chromium sandbox check:
+  ```bash
+  sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
+  ```
+- **macOS:** the build is unsigned, so on first launch right-click `KeyCut.app` → **Open**, or run `xattr -cr KeyCut.app`
+- **Windows:** nothing to do — extract and run `KeyCut.exe`
+
 ## Recording with OBS
 
 KeyCut cuts only at keyframes, so the more keyframes a file has, the closer a cut can land to the exact frame you want.
 
 In OBS, record with frequent keyframes: add `keyint=6` to the x264/x265 encoder options (or set a low keyframe interval) so a keyframe is written every 6 frames — about every 0.2 s at 30 fps or 0.1 s at 60 fps. This lets you cut with frame-level precision. The trade-off is a slightly larger recording, since every keyframe is an independently decodable frame.
-
-## Download
-
-Builds are published on the [Releases](https://github.com/wdmcourses/KeyCut/releases)
-page. Download the archive, extract and run `KeyCut`.
 
 ## Building from source
 
