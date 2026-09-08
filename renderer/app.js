@@ -292,8 +292,14 @@ const SEEK_EPS = 0.001;
 
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 20000;
-const SCROLLBAR_PAD = 4;
-const SCROLLBAR_THUMB_MIN = 100;
+const SCROLLBAR = {
+  pad: 4,
+  thumbMin: 80,
+  caret: 12,
+  tol: 4,
+  track: 20,
+  inset: 3
+};
 const RESIZE_TOL_PX = 7;
 const WHEEL_LINE_PX = 40;          
 const WHEEL_STEP_FRACTION = 0.12;  
@@ -394,8 +400,7 @@ class Timeline {
 
     this.scrollbarEl = opts.scrollbar || null;
     this.thumbEl = opts.thumb || null;
-    this.handleLEl = opts.handleL || null;
-    this.handleREl = opts.handleR || null;
+    this.sb = SCROLLBAR;
     if (this.scrollbarEl && this.thumbEl) this.initScrollbar();
 
     
@@ -481,19 +486,19 @@ class Timeline {
   }
 
   scrollLeftPx(barW) {
-    const u = Math.max(1, barW - 2 * SCROLLBAR_PAD);
-    return this.duration > 0 ? SCROLLBAR_PAD + (this.viewStart / this.duration) * u : SCROLLBAR_PAD;
+    const u = Math.max(1, barW - 2 * SCROLLBAR.pad);
+    return this.duration > 0 ? SCROLLBAR.pad + (this.viewStart / this.duration) * u : SCROLLBAR.pad;
   }
 
   scrollRightPx(barW) {
-    const u = Math.max(1, barW - 2 * SCROLLBAR_PAD);
+    const u = Math.max(1, barW - 2 * SCROLLBAR.pad);
     const e = Math.min(this.viewEnd(), this.duration);
-    return this.duration > 0 ? SCROLLBAR_PAD + (e / this.duration) * u : barW - SCROLLBAR_PAD;
+    return this.duration > 0 ? SCROLLBAR.pad + (e / this.duration) * u : barW - SCROLLBAR.pad;
   }
 
   barTime(x, barW) {
-    const u = Math.max(1, barW - 2 * SCROLLBAR_PAD);
-    const t = ((x - SCROLLBAR_PAD) / u) * this.duration;
+    const u = Math.max(1, barW - 2 * SCROLLBAR.pad);
+    const t = ((x - SCROLLBAR.pad) / u) * this.duration;
     return this.duration > 0 ? Math.min(Math.max(0, t), this.duration) : 0;
   }
 
@@ -501,15 +506,15 @@ class Timeline {
     const L = this.scrollLeftPx(barW);
     const R = this.scrollRightPx(barW);
     let left = L, right = R;
-    if (R - L < SCROLLBAR_THUMB_MIN) {
-      const pad = SCROLLBAR_PAD;
+    if (R - L < SCROLLBAR.thumbMin) {
+      const pad = SCROLLBAR.pad;
       const center = (L + R) / 2;
-      left = center - SCROLLBAR_THUMB_MIN / 2;
-      right = center + SCROLLBAR_THUMB_MIN / 2;
-      if (left < pad) { left = pad; right = left + SCROLLBAR_THUMB_MIN; }
-      if (right > barW - pad) { right = barW - pad; left = Math.max(pad, right - SCROLLBAR_THUMB_MIN); }
+      left = center - SCROLLBAR.thumbMin / 2;
+      right = center + SCROLLBAR.thumbMin / 2;
+      if (left < pad) { left = pad; right = left + SCROLLBAR.thumbMin; }
+      if (right > barW - pad) { right = barW - pad; left = Math.max(pad, right - SCROLLBAR.thumbMin); }
     }
-    return { left, right, naturalLeft: L, naturalRight: R };
+    return { left, right };
   }
 
   setViewCenter(t) {
@@ -519,8 +524,8 @@ class Timeline {
 
   initScrollbar() {
     const bar = this.scrollbarEl;
-    const CARET_W = 12;
-    const TOL = 4;
+    const caret = SCROLLBAR.caret;
+    const tol = SCROLLBAR.tol;
 
     bar.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -528,16 +533,14 @@ class Timeline {
       const barW = rect.width;
       const x = e.clientX - rect.left;
       const g = this.thumbVisual(barW);
-      const L = g.naturalLeft;
-      const R = g.naturalRight;
       const bodyL = g.left;
       const bodyR = g.right;
 
       let mode = 'pan';
       let grabOff = 0;
-      if (x >= L - TOL && x <= L + CARET_W + TOL) { mode = 'left'; grabOff = x - L; }
-      else if (x >= R - CARET_W - TOL && x <= R + TOL) { mode = 'right'; grabOff = R - x; }
-      else if (x < bodyL - TOL || x > bodyR + TOL) {
+      if (x >= bodyL - tol && x <= bodyL + caret + tol) { mode = 'left'; grabOff = x - bodyL; }
+      else if (x >= bodyR - caret - tol && x <= bodyR + tol) { mode = 'right'; grabOff = bodyR - x; }
+      else if (x < bodyL - tol || x > bodyR + tol) {
         this.setViewCenter(this.barTime(x, barW));
         this.needsRender = true;
         this.tick();
@@ -552,7 +555,7 @@ class Timeline {
         if (mode === 'left') this.dragLeftEdge(nx - grabOff, barW);
         else if (mode === 'right') this.dragRightEdge(nx + grabOff, barW);
         else {
-          const u = Math.max(1, barW - 2 * SCROLLBAR_PAD);
+          const u = Math.max(1, barW - 2 * SCROLLBAR.pad);
           this.viewStart = startView + ((nx - startX) / u) * this.duration;
           this.clampView();
         }
@@ -599,8 +602,6 @@ class Timeline {
     const g = this.thumbVisual(barW);
     this.thumbEl.style.left = g.left + 'px';
     this.thumbEl.style.width = Math.max(0, g.right - g.left) + 'px';
-    if (this.handleLEl) this.handleLEl.style.left = (g.naturalLeft - g.left) + 'px';
-    if (this.handleREl) this.handleREl.style.right = (g.right - g.naturalRight) + 'px';
   }
 
   timeToX(t) { return (t - this.viewStart) * this.pxPerSec; }
@@ -1236,6 +1237,13 @@ const app = {
   },
 
   init() {
+    const sbStyle = document.documentElement.style;
+    sbStyle.setProperty('--sb-pad', SCROLLBAR.pad + 'px');
+    sbStyle.setProperty('--sb-thumb-min', SCROLLBAR.thumbMin + 'px');
+    sbStyle.setProperty('--sb-caret', SCROLLBAR.caret + 'px');
+    sbStyle.setProperty('--sb-tol', SCROLLBAR.tol + 'px');
+    sbStyle.setProperty('--sb-track', SCROLLBAR.track + 'px');
+    sbStyle.setProperty('--sb-inset', SCROLLBAR.inset + 'px');
     this.video = $('video');
     this.scrubAudio = $('scrub-audio');
     this.scrubTimer = null;
@@ -1251,9 +1259,7 @@ const app = {
     this.model.onMutate = () => this.markDirty();
     this.timeline = new Timeline($('timeline'), {
       scrollbar: $('timeline-scrollbar'),
-      thumb: $('scrollbar-thumb'),
-      handleL: $('scrollbar-handle-l'),
-      handleR: $('scrollbar-handle-r')
+      thumb: $('scrollbar-thumb')
     });
     this.timeline.onZoom = (pps) => {
       const zr = $('zoom-range');

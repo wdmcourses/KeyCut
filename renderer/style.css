@@ -280,7 +280,7 @@ body {
 
 #timeline-scrollbar {
   position: relative;
-  height: 20px;
+  height: var(--sb-track, 20px);
   margin-top: 8px;
   border-radius: var(--radius);
   background: var(--scrollbar-track);
@@ -288,8 +288,8 @@ body {
 }
 #scrollbar-thumb {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  top: var(--sb-inset, 3px);
+  bottom: var(--sb-inset, 3px);
   left: 0;
   border-radius: var(--radius);
   background: var(--scrollbar-thumb);
@@ -316,7 +316,7 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 12px;
+  width: var(--sb-caret, 12px);
   background: var(--scrollbar-caret);
   cursor: ew-resize;
   z-index: 2;

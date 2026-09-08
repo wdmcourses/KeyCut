@@ -115,16 +115,17 @@ app.whenReady().then(async () => {
       thumbRight: tRect.right - barRect.left,
       earL: lRect.left - barRect.left,
       earR: rRect.right - barRect.left,
-      naturalL: T.scrollLeftPx(barW),
-      naturalR: T.scrollRightPx(barW),
-      tw: tRect.width
+      tw: tRect.width,
+      minW: T.sb.thumbMin,
+      minEarSpan: 2 * T.sb.caret
     };
   })()`);
   check('no horizontal overflow (thumb right edge <= barW)', edge.thumbRight <= edge.barW + 0.01);
   check('thumb stays inside the track (left edge >= 0)', edge.thumbLeft >= -0.01);
-  check('thumb is at least the min width (100px)', edge.tw >= 100 - 0.01);
-  check('left ear sits on the true window start', Math.abs(edge.earL - edge.naturalL) < 1.5);
-  check('right ear sits on the true time end', Math.abs(edge.earR - edge.naturalR) < 1.5);
+  check('thumb is at least the min width', edge.tw >= edge.minW - 0.01);
+  check('left ear pinned to the thumb left edge', Math.abs(edge.earL - edge.thumbLeft) < 1.5);
+  check('right ear pinned to the thumb right edge', Math.abs(edge.earR - edge.thumbRight) < 1.5);
+  check('ears do not converge at max zoom', edge.earR - edge.earL >= edge.minEarSpan - 0.01);
 
   console.log('[7] ear drag still resizes when the thumb is at min width');
   const earDrag = await js(`(() => {
@@ -135,11 +136,11 @@ app.whenReady().then(async () => {
     T.setZoom(2000);
     T.viewStart = 3;
     T.clampView(); T.updateScrollbar();
-    const naturalR = T.scrollRightPx(barW);
+    const grabR = T.thumbVisual(barW).right;
     const vEndBefore = T.viewEnd();
     const ppsBefore = T.pxPerSec;
-    bar.dispatchEvent(new MouseEvent('mousedown', { clientX: br.left + naturalR, clientY: br.top + 10, bubbles: true, cancelable: true }));
-    window.dispatchEvent(new MouseEvent('mousemove', { clientX: br.left + naturalR + 40, clientY: br.top + 10, bubbles: true }));
+    bar.dispatchEvent(new MouseEvent('mousedown', { clientX: br.left + grabR, clientY: br.top + 10, bubbles: true, cancelable: true }));
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: br.left + grabR + 40, clientY: br.top + 10, bubbles: true }));
     window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     return { vEndBefore, vEndAfter: T.viewEnd(), ppsBefore, pps: T.pxPerSec };
   })()`);

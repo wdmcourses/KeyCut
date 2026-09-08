@@ -10,7 +10,6 @@ contextBridge.exposeInMainWorld('keycut', {
   },
   saveProjectDialog: (defaultName) => ipcRenderer.invoke('dialog:saveProject', defaultName),
   saveExportDialog: (defaultName) => ipcRenderer.invoke('dialog:saveExport', defaultName),
-  confirmOpen: (message) => ipcRenderer.invoke('dialog:confirm', message),
   getFilePath: (file) => webUtils.getPathForFile(file),
 
   probeVideo: (filePath) => ipcRenderer.invoke('probe:video', filePath),

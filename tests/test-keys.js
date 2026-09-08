@@ -162,7 +162,7 @@ app.whenReady().then(async () => {
   await js(`window.__app.scrubEnd(); window.__app.scrubBlip(${(k1 + k2) / 2})`);
   const blipGray = await js(`window.__app.lastScrubTime`);
   check('no scrub blip in gray area', blipGray < 0);
-  const hasDrop = await js(`typeof window.keycut.getFilePath === 'function' && typeof window.keycut.confirmOpen === 'function'`);
+  const hasDrop = await js(`typeof window.keycut.getFilePath === 'function'`);
   check('drop APIs exposed', hasDrop);
   await js(`window.__app.state.source = null;`);
   await js(`window.__app.handleDroppedFile('${SRC.replace(/\\/g, '\\\\')}')`);
