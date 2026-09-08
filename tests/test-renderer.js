@@ -11,7 +11,7 @@ const PROJ = path.join(DIR, 'rt.kc');
 const OUT = path.join(DIR, 'rt_out.mp4');
 const TMP = path.join(DIR, 'rt_tmp');
 
-// Generate a deterministic fixture (10s, 30fps, keyframe every 15 frames).
+
 function makeFixture() {
   if (!fs.existsSync(SRC)) {
     fs.mkdirSync(DIR, { recursive: true });
@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
 
   const js = (code) => win.webContents.executeJavaScript(code);
 
-  // --- load source via real IPC probe ---
+  
   console.log('[1] load source through IPC probe');
   const src = SRC.replace(/\\/g, '\\\\');
   await js(`window.__app.loadSource('${src}')`);
@@ -63,7 +63,7 @@ app.whenReady().then(async () => {
   check('source set', st.src);
   const DUR = st.d;
 
-  // --- editing (cuts snap to keyframes; X dims) ---
+  
   console.log('[2] cuts and dims');
   const r2 = await js(`(() => {
     const keys = window.__app.state.keyTimes;
@@ -87,7 +87,7 @@ app.whenReady().then(async () => {
   check('deleted [false,true,true,false]', r2.okDel);
   check('keptRuns [[0,k6],[k10,end]]', r2.okRuns);
 
-  // --- keyframe nav ---
+  
   console.log('[3] keyframe navigation');
   await js(`window.__app.seekTo(4.7); window.__app.nextKeyframe();`);
   const c1 = await js(`window.__app.state.cursor`);
@@ -99,7 +99,7 @@ app.whenReady().then(async () => {
   const expPrev = [...akArr].reverse().find((k) => k < c1 - 1e-6);
   check('prev keyframe matches active key list', Math.abs(c2 - expPrev) < 1e-6);
 
-  // --- save / load project ---
+  
   console.log('[4] project save/load via IPC');
   await js(`window.__app.state.projectPath = '${PROJ.replace(/\\/g, '\\\\')}'; window.__app.saveProject();`);
   await new Promise((r) => setTimeout(r, 600));
@@ -112,7 +112,7 @@ app.whenReady().then(async () => {
   check('loaded cuts match', okCuts);
   check('loaded deleted match', JSON.stringify(loaded.deleted) === JSON.stringify(currentDel));
 
-  // --- export via IPC ---
+  
   console.log('[5] export via IPC (cut+concat+cleanup)');
   const res = await js(`window.keycut.exportStart({sourcePath:'${src}', segments:[[0,3],[5,6]], outputPath:'${OUT.replace(/\\/g, '\\\\')}'})`);
   check('export ok', !!(res && res.ok));
@@ -129,7 +129,7 @@ app.whenReady().then(async () => {
   });
   check('output duration ~4s', durOut !== null && Math.abs(durOut - 4) < 0.6);
 
-  // --- timeline drawn after load ---
+  
   const drawn = await js(`(() => {
     const c = document.querySelector('#timeline');
     const ctx = c.getContext('2d');
@@ -140,7 +140,7 @@ app.whenReady().then(async () => {
   })()`);
   check('timeline has pixels', drawn > 1000);
 
-  // [6] OS-open of a .kc project (fresh state -> routed like a drop)
+  
   console.log('[6] open .kc from OS');
   await js(`window.__app.state.source = null;`);
   await js(`window.__app.handleDroppedFile('${PROJ.replace(/\\/g, '\\\\')}')`);

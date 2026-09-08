@@ -1,8 +1,8 @@
-// Downloads a static ffmpeg binary for a target platform into
-// ./vendor/ffmpeg/<platform>/. The portable build embeds it flat into
-// resources/ (LosslessCut style). Run:
-//   node scripts/get-ffmpeg.js              # current platform
-//   node scripts/get-ffmpeg.js --platform=linux|win32|darwin
+
+
+
+
+
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -12,8 +12,8 @@ const OUT_DIR = path.join(ROOT, 'vendor', 'ffmpeg');
 const TMP_ZIP = path.join(ROOT, 'vendor', 'ffmpeg-download.zip');
 const TMP_EXTRACT = path.join(ROOT, 'vendor', '.ffmpeg-extract');
 
-// BtbN static builds for Windows; johnvansickle for Linux; evermeet for macOS
-// (x86_64; runs via Rosetta on Apple Silicon).
+
+
 const PLATFORMS = {
   win32: {
     url: 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
@@ -69,8 +69,8 @@ async function main() {
 
     let extracted = false;
     try {
-      // bsdtar on Windows rejects drive-letter paths (it reads "C:" as a URL
-      // scheme), so run it from ROOT with relative paths.
+      
+      
       const args = cfg.kind === 'xz'
         ? ['-xJf', path.relative(ROOT, TMP_ZIP), '-C', path.relative(ROOT, TMP_EXTRACT)]
         : ['-xf', path.relative(ROOT, TMP_ZIP), '-C', path.relative(ROOT, TMP_EXTRACT)];
@@ -81,12 +81,12 @@ async function main() {
         execFileSync('powershell', ['-NoProfile', '-Command', 'Expand-Archive -Path "' + TMP_ZIP + '" -DestinationPath "' + TMP_EXTRACT + '" -Force'], { stdio: 'ignore' });
         extracted = true;
       } catch {
-        // ignore, checked below
+        
       }
     }
     if (!extracted) throw new Error('failed to extract the ffmpeg archive');
 
-    // locate bin/<binary> inside the extracted tree
+    
     const found = [];
     (function walk(dir) {
       for (const e of fs.readdirSync(dir)) {

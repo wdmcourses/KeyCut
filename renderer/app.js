@@ -1,6 +1,6 @@
 'use strict';
 
-// ---------- Utils ----------
+
 
 const $ = (id) => document.getElementById(id);
 
@@ -22,7 +22,7 @@ function toFileUrl(p) {
 const PLAY_SVG = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 5.5 L18.5 12 L8 18.5 Z" fill="currentColor"/></svg>';
 const PAUSE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="5.5" width="3.6" height="13" rx="1.2" fill="currentColor"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1.2" fill="currentColor"/></svg>';
 
-// Canvas palette - mirrors the CSS design tokens so both stay in sync.
+
 const COLORS = {
   bg: '#101216',
   noVideoBg: '#0d0f12',
@@ -35,8 +35,8 @@ const COLORS = {
   keyframeRgb: '255,209,102',
   keyframeAlphaBright: 0.95,
   keyframeAlphaDim: 0.5,
-  // On dimmed (gray) blocks keyframe lines are a light gray so they stay
-  // clearly visible against the dark block background (but not accent yellow).
+  
+  
   keyframeGrayRgb: '94,102,112',
   keyframeGrayAlphaBright: 0.95,
   keyframeGrayAlphaDim: 0.5,
@@ -52,7 +52,7 @@ const COLORS = {
   separator: '#24282e'
 };
 
-// ---------- EditorModel ----------
+
 
 class EditorModel {
   constructor(duration) {
@@ -72,8 +72,8 @@ class EditorModel {
     this.historyIndex = -1;
   }
 
-  // Push the current state for undo. Snapshots are capped by a memory budget so
-  // projects with millions of cuts stay undoable without exhausting RAM.
+  
+  
   snapshot() {
     this.history = this.history.slice(0, this.historyIndex + 1);
     this.history.push({ cuts: this.cuts.slice(), deleted: this.deleted.slice() });
@@ -113,7 +113,7 @@ class EditorModel {
     this._runsCache = null;
   }
 
-  // index of segment [cuts[i], cuts[i+1]) containing t
+  
   segmentOf(t) {
     const cuts = this.cuts;
     let lo = 0, hi = cuts.length - 1;
@@ -135,17 +135,17 @@ class EditorModel {
     return true;
   }
 
-  // dim a segment (mark it deleted/excluded); keeps it on the timeline
+  
   deleteAt(i) {
     return this.deleteRange(i, i);
   }
 
-  // restore a dimmed segment
+  
   restoreAt(i) {
     return this.restoreRange(i, i);
   }
 
-  // dim a contiguous range of segments
+  
   deleteRange(a, b) {
     if (a < 0 || b >= this.deleted.length || a > b) return false;
     if (!this.deleted.slice(a, b + 1).some((d) => !d)) return false;
@@ -154,7 +154,7 @@ class EditorModel {
     return true;
   }
 
-  // dim an arbitrary set of segment indices (Alt+click multi-selection)
+  
   deleteIndices(idx) {
     const idxs = [...new Set(idx)].filter((i) => Number.isInteger(i) && i >= 0 && i < this.deleted.length);
     if (!idxs.length) return false;
@@ -164,7 +164,7 @@ class EditorModel {
     return true;
   }
 
-  // restore an arbitrary set of segment indices
+  
   restoreIndices(idx) {
     const idxs = [...new Set(idx)].filter((i) => Number.isInteger(i) && i >= 0 && i < this.deleted.length);
     if (!idxs.length) return false;
@@ -174,7 +174,7 @@ class EditorModel {
     return true;
   }
 
-  // restore a contiguous range of segments
+  
   restoreRange(a, b) {
     if (a < 0 || b >= this.deleted.length || a > b) return false;
     if (!this.deleted.slice(a, b + 1).some((d) => d)) return false;
@@ -183,9 +183,9 @@ class EditorModel {
     return true;
   }
 
-  // merge selected adjacent segments [a..b] back into one whole block.
-  // Works for kept (blue) and dimmed (gray) blocks alike; the run must be
-  // homogeneous (never mixed kept+gray).
+  
+  
+  
   mergeRange(a, b) {
     if (a < 0 || b >= this.deleted.length || a > b) return false;
     if (a === b) return false;
@@ -197,29 +197,29 @@ class EditorModel {
     return true;
   }
 
-// Drag a boundary between a kept and a gray segment. The boundary can move
-// freely within the union of the two segments (snapping to keyframes): into
-// the gray it extends the kept one, into the kept one it shrinks it. When it
-// reaches either far side the consumed segment is merged away completely.
-// Returns 0 = no-op, 1 = boundary moved, 2 = one segment fully consumed.
+
+
+
+
+
 moveBoundary(k, t) {
   if (k < 1 || k > this.cuts.length - 2) return 0;
   const keptBefore = !this.deleted[k - 1];
   const keptAfter = !this.deleted[k];
-  if (keptBefore === keptAfter) return 0; // not a kept|gray boundary
+  if (keptBefore === keptAfter) return 0; 
   const lo = this.cuts[k - 1];
   const hi = this.cuts[k + 1];
   t = Math.min(Math.max(t, lo), hi);
   if (Math.abs(t - this.cuts[k]) < 1e-9) return 0;
   if (!this.suppressSnapshot) this.snapshot();
   if (t - lo < 1e-9) {
-    // left extreme: segment k-1 consumed, segment k survives
+    
     this.cuts.splice(k, 1);
     this.deleted.splice(k - 1, 1);
     return 2;
   }
   if (hi - t < 1e-9) {
-    // right extreme: segment k consumed, segment k-1 survives
+    
     this.cuts.splice(k, 1);
     this.deleted.splice(k, 1);
     return 2;
@@ -253,59 +253,58 @@ moveBoundary(k, t) {
   }
 }
 
-// ---------- Timeline ----------
 
-// One continuous timeline: the segments track fills the whole row, the ruler
-// sits below it. Kept segments are blue, dimmed (cut out) segments are dark.
+
+
+
 const SEG = { y: 1, h: 50 };
 const RULER = { y: 53, h: 18 };
 
-// Corner radius for segment blocks / selection frame - mirrors --radius-md
-// (the button radius) so the whole UI shares one scale.
+
+
 const SEG_RADIUS = 7;
 
-// Hold-to-scan speed adapts to keyframe density: we cross ~SCAN_KF_PER_SEC
-// keyframes per second of holding, clamped to a sane range so pathological
-// projects (e.g. all-I-frame) don't become unusably slow.
+
+
+
 const SCAN_KF_PER_SEC = 6;
 const SCAN_SPEED_MIN = 1;
 const SCAN_SPEED_MAX = 20;
 
-// Pause between a tap on S/F and automatic playback resume (so the rewind is
-// visible). Repeated taps restart it.
+
+
 const STEP_PAUSE_MS = 200;
 
-// Playback boundary semantics:
-//  - cuts are always placed on keyframes; the frame at time cuts[k] belongs to
-//    segment k (the one that STARTS at that boundary). segmentOf() implements
-//    exactly this rule.
-//  - a kept segment plays from its start keyframe up to (not including) its end
-//    boundary.
-//  - when the playhead reaches a frame of a gray segment, playback jumps to the
-//    start keyframe of the next kept run.
-// SEEK_EPS is sub-frame and never changes the presented frame. Seeking to a
-// kept start EXACTLY (no offset) plays from the first sample of that segment;
-// the epsilon is only used as a nudge in guardTarget() so the browser's
-// boundary read-back is never misread as the gray tail (which would re-trigger
-// the guard and skip the very start of the kept audio).
+
+
+
+
+
+
+
+
+
+
+
+
+
 const SEEK_EPS = 0.001;
 
-// Tuning constants (UX / rendering / playback).
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 20000;
-const SCROLLBAR_THUMB_MIN = 120;
-const SCROLLBAR_PAD = 4; // inner margin so the thumb never touches the track edges
+const SCROLLBAR_PAD = 4;
+const SCROLLBAR_THUMB_MIN = 100;
 const RESIZE_TOL_PX = 7;
-const WHEEL_LINE_PX = 40;          // deltaMode 'line' -> approximate pixels
-const WHEEL_STEP_FRACTION = 0.12;  // view width moved per wheel notch
-const RENDER_CAP = 4000;           // per-frame culling caps (segments/keyframes)
-const CARET_UPDATE_MS = 0.004;     // min caret move before re-render during playback
-const DUR_EXTEND_MARGIN = 0.05;    // loadedmetadata correction margin
-const BLIP_MS = 80;                // min gap between audio blips
-const BLIP_PLAY_MS = 150;          // how long a blip plays
-const HOLD_TO_SCAN_MS = 250;       // key held before scanning starts
-const SCAN_INTERVAL_MS = 33;       // scan update interval
-const SCAN_SEEK_MS = 0.03;         // min scan move before seeking the video
+const WHEEL_LINE_PX = 40;          
+const WHEEL_STEP_FRACTION = 0.12;  
+const RENDER_CAP = 4000;           
+const CARET_UPDATE_MS = 0.004;     
+const DUR_EXTEND_MARGIN = 0.05;    
+const BLIP_MS = 80;                
+const BLIP_PLAY_MS = 150;          
+const HOLD_TO_SCAN_MS = 250;       
+const SCAN_INTERVAL_MS = 33;       
+const SCAN_SEEK_MS = 0.03;         
 const EXPORT_CONCAT_PROGRESS = 0.97;
 
 function arraysEqual(a, b) {
@@ -334,8 +333,8 @@ function binaryFirstRuns(runs, t) {
   return lo;
 }
 
-// The caret is never free: it snaps to the nearest keyframe. Cuts therefore
-// always land on keyframes (lossless-friendly).
+
+
 function snapKey(t, keys) {
   if (!keys || !keys.length) return t;
   let idx = binaryFirst(keys, t);
@@ -345,8 +344,8 @@ function snapKey(t, keys) {
   return (next - t <= t - prev) ? next : prev;
 }
 
-// Nearest keyframe inside [lo, hi] (used when dragging a boundary across a
-// gray segment - its interior keyframes become valid cut positions again).
+
+
 function snapInRange(t, lo, hi, keys) {
   if (!keys || !keys.length) return t;
   const idx = binaryFirst(keys, t);
@@ -361,7 +360,7 @@ function snapInRange(t, lo, hi, keys) {
   return best !== null ? best : t;
 }
 
-// Largest keyframe <= t (the start of the keyframe interval the cursor is on).
+
 function lastKeyAtOrBefore(t, keys) {
   if (!keys || !keys.length) return t;
   const idx = binaryFirst(keys, t);
@@ -383,23 +382,25 @@ class Timeline {
     this.pxPerSec = 50;
     this.playing = false;
 
-    this.drag = null; // { mode: 'scrub' | 'pan' | 'resize', lastX, moved }
-    this.selected = null; // selected segment range [from, to] or null
-    this.selectedAnchor = null; // anchor segment index for Shift+click extension
-    this.selectedSet = null; // Set of indices for Alt+click multi-selection
+    this.drag = null; 
+    this.selected = null; 
+    this.selectedAnchor = null; 
+    this.selectedSet = null; 
     this.needsRender = true;
     this.onZoom = null;
-    this.onResize = null; // called after a boundary resize (app refreshes keys/stats)
+    this.onResize = null; 
 
     this.hatch = null;
 
     this.scrollbarEl = opts.scrollbar || null;
     this.thumbEl = opts.thumb || null;
+    this.handleLEl = opts.handleL || null;
+    this.handleREl = opts.handleR || null;
     if (this.scrollbarEl && this.thumbEl) this.initScrollbar();
 
-    // Smooth corner-radius transitions (split/merge/dim/restore animate the
-    // rounding of the affected blocks). Only visible segments are tracked.
-    this.cornerState = new Map(); // segmentIndex -> [tl,tr,br,bl] current radii
+    
+    
+    this.cornerState = new Map(); 
     this._cornerRAF = null;
 
     this.canvas.addEventListener('mousedown', (e) => this.onDown(e));
@@ -427,9 +428,9 @@ class Timeline {
     this.duration = duration;
     this.keyTimes = keyTimes;
     this.model = model;
-    this.selected = null; // selected segment range [from, to] or null
-    this.selectedAnchor = null; // anchor segment index for Shift+click extension
-    this.selectedSet = null; // Set of indices for Alt+click multi-selection
+    this.selected = null; 
+    this.selectedAnchor = null; 
+    this.selectedSet = null; 
     if (cursor !== undefined) this.cursor = cursor;
     this.cornerState = new Map();
     this.fit();
@@ -437,7 +438,7 @@ class Timeline {
     this.tick();
   }
 
-  // Backward-compatible single-selection accessor (focus of the range).
+  
   get selectedIndex() {
     return this.selected ? this.selected[1] : null;
   }
@@ -470,10 +471,10 @@ class Timeline {
     this.updateScrollbar();
   }
 
-  // ---------- scrollbar (Premiere-style) ----------
-  // The bar maps the whole project; the thumb is the visible range with a left
-  // and a right caret. Drag the body to pan, drag a caret to resize (zoom),
-  // click the track to jump the view.
+  
+  
+  
+  
 
   viewEnd() {
     return this.viewStart + this.w / this.pxPerSec;
@@ -496,6 +497,21 @@ class Timeline {
     return this.duration > 0 ? Math.min(Math.max(0, t), this.duration) : 0;
   }
 
+  thumbVisual(barW) {
+    const L = this.scrollLeftPx(barW);
+    const R = this.scrollRightPx(barW);
+    let left = L, right = R;
+    if (R - L < SCROLLBAR_THUMB_MIN) {
+      const pad = SCROLLBAR_PAD;
+      const center = (L + R) / 2;
+      left = center - SCROLLBAR_THUMB_MIN / 2;
+      right = center + SCROLLBAR_THUMB_MIN / 2;
+      if (left < pad) { left = pad; right = left + SCROLLBAR_THUMB_MIN; }
+      if (right > barW - pad) { right = barW - pad; left = Math.max(pad, right - SCROLLBAR_THUMB_MIN); }
+    }
+    return { left, right, naturalLeft: L, naturalRight: R };
+  }
+
   setViewCenter(t) {
     this.viewStart = t - this.w / (2 * this.pxPerSec);
     this.clampView();
@@ -503,8 +519,6 @@ class Timeline {
 
   initScrollbar() {
     const bar = this.scrollbarEl;
-    // Caret hit zones must match the rendered caret width (CSS ~9px) plus a
-    // small tolerance, otherwise grabbing the caret edge falls through to pan.
     const CARET_W = 12;
     const TOL = 4;
 
@@ -513,19 +527,17 @@ class Timeline {
       const rect = bar.getBoundingClientRect();
       const barW = rect.width;
       const x = e.clientX - rect.left;
-      const left = this.scrollLeftPx(barW);
-      const right = this.scrollRightPx(barW);
-      // The rendered thumb may be clamped to its min width, so its visual right
-      // edge (where the right caret sits) can be further right than the time-
-      // based right.
-      const rightVis = Math.max(right, left + SCROLLBAR_THUMB_MIN);
+      const g = this.thumbVisual(barW);
+      const L = g.naturalLeft;
+      const R = g.naturalRight;
+      const bodyL = g.left;
+      const bodyR = g.right;
 
       let mode = 'pan';
       let grabOff = 0;
-      if (x >= left - TOL && x <= left + CARET_W + TOL) { mode = 'left'; grabOff = x - left; }
-      else if (x >= rightVis - CARET_W - TOL && x <= rightVis + TOL) { mode = 'right'; grabOff = rightVis - x; }
-      else if (x < left - TOL || x > rightVis + TOL) {
-        // click on track: centre the view there, then allow panning
+      if (x >= L - TOL && x <= L + CARET_W + TOL) { mode = 'left'; grabOff = x - L; }
+      else if (x >= R - CARET_W - TOL && x <= R + TOL) { mode = 'right'; grabOff = R - x; }
+      else if (x < bodyL - TOL || x > bodyR + TOL) {
         this.setViewCenter(this.barTime(x, barW));
         this.needsRender = true;
         this.tick();
@@ -537,8 +549,6 @@ class Timeline {
 
       const move = (ev) => {
         const nx = ev.clientX - rect.left;
-        // Preserve where inside the caret the grab happened, so the caret
-        // follows the mouse exactly instead of jumping.
         if (mode === 'left') this.dragLeftEdge(nx - grabOff, barW);
         else if (mode === 'right') this.dragRightEdge(nx + grabOff, barW);
         else {
@@ -551,6 +561,7 @@ class Timeline {
         this.updateScrollbar();
       };
       const up = () => {
+        this.updateScrollbar();
         if (this.thumbEl) this.thumbEl.classList.remove('dragging');
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
@@ -560,7 +571,6 @@ class Timeline {
     });
   }
 
-  // min visible range (full zoom-in) in seconds
   minViewW() {
     return this.w / ZOOM_MAX;
   }
@@ -586,16 +596,17 @@ class Timeline {
   updateScrollbar() {
     if (!this.scrollbarEl || !this.thumbEl) return;
     const barW = this.scrollbarEl.clientWidth || 0;
-    const left = this.scrollLeftPx(barW);
-    const right = this.scrollRightPx(barW);
-    this.thumbEl.style.left = left + 'px';
-    this.thumbEl.style.width = Math.max(SCROLLBAR_THUMB_MIN, right - left) + 'px';
+    const g = this.thumbVisual(barW);
+    this.thumbEl.style.left = g.left + 'px';
+    this.thumbEl.style.width = Math.max(0, g.right - g.left) + 'px';
+    if (this.handleLEl) this.handleLEl.style.left = (g.naturalLeft - g.left) + 'px';
+    if (this.handleREl) this.handleREl.style.right = (g.right - g.naturalRight) + 'px';
   }
 
   timeToX(t) { return (t - this.viewStart) * this.pxPerSec; }
   xToTime(x) { return this.viewStart + x / this.pxPerSec; }
 
-  // Zoom keeping the CENTRE of the visible range fixed.
+  
   setZoom(pps) {
     const pps2 = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, pps));
     if (this.duration <= 0) { this.pxPerSec = pps2; return; }
@@ -608,8 +619,8 @@ class Timeline {
     this.tick();
   }
 
-  // Ctrl+wheel zooms anchored at the pointer position (the time under the
-  // cursor stays under it). The zoom slider uses setZoom() instead.
+  
+  
   zoomAt(mx, factor) {
     const oldPPS = this.pxPerSec;
     const t = this.xToTime(mx);
@@ -621,25 +632,25 @@ class Timeline {
     this.tick();
   }
 
-  // ---------- smooth corner-radius transitions ----------
-  // Every block is a rounded chip (all four corners = SEG_RADIUS). When a cut
-  // creates a new boundary, the two new chips' facing corners animate from 0
-  // to SEG_RADIUS so a split visibly grows two rounded blocks. The animation
-  // is tracked per boundary time so indices shifting across edits don't matter.
+  
+  
+  
+  
+  
 
   radiusAt(t) {
     const s = this.cornerState.get(t);
     return s !== undefined ? s : SEG_RADIUS;
   }
 
-  // Capture the set of boundary times present before an edit.
+  
   captureCornerTargets() {
     if (!this.model || !this.model.cuts.length) return new Set();
     return new Set(this.model.cuts);
   }
 
-  // After an edit: boundaries that appeared (new cuts) animate their rounding
-  // in from 0; boundaries that disappeared are simply gone.
+  
+  
   applyCornerChange(before) {
     if (!this.model || !this.model.cuts.length) return;
     let seeded = false;
@@ -668,7 +679,7 @@ class Timeline {
     }
   }
 
-  // ---------- interactions ----------
+  
 
   regionAt(y) {
     if (y >= SEG.y && y < SEG.y + SEG.h) return 'seg';
@@ -693,10 +704,10 @@ class Timeline {
       this.tick();
       return;
     }
-    this.selectedSet = null; // Alt+click multi-selection gives way to plain/Shift clicks
+    this.selectedSet = null; 
     if (shift && this.selectedAnchor != null) {
-      // Extend within a homogeneous run (all kept or all gray) - a selection
-      // never crosses a kept|gray boundary.
+      
+      
       const a = this.selectedAnchor;
       const st = this.model.deleted[a];
       const same = (idx) => idx >= 0 && idx < this.model.deleted.length && this.model.deleted[idx] === st;
@@ -714,10 +725,10 @@ class Timeline {
     this.tick();
   }
 
-  // Alt+click: toggle a segment in/out of a multi-selection (used to gather
-  // several kept segments before dimming them all with X). The FIRST Alt+click
-  // starts the multi-set from the first segment (carrying over any current
-  // plain selection) - it never drops the already-selected segment.
+  
+  
+  
+  
   toggleSelectSegment(i) {
     if (!this.model || i < 0 || i >= this.model.deleted.length) return;
     if (!this.selectedSet) {
@@ -735,7 +746,7 @@ class Timeline {
     this.tick();
   }
 
-  // Indices currently selected, from the Alt multi-set or the plain range.
+  
   selectionIndices() {
     if (this.selectedSet && this.selectedSet.size) return [...this.selectedSet];
     if (this.selected) {
@@ -753,18 +764,18 @@ class Timeline {
     const y = e.clientY - rect.top;
     const region = this.regionAt(y);
     if (app.cancelStepPause) app.cancelStepPause();
-    // Pan with middle button or drag on empty margins. Shift is reserved for
-    // multi-select (Shift+click extends the selection).
+    
+    
     const pan = e.button === 1 || region === null;
-    // Alt+click is multi-select (toggle a segment), so it never starts a
-    // resize drag.
+    
+    
     const rk = (!pan && region === 'seg' && !e.altKey) ? this.resizeBoundaryAt(x) : null;
     if (rk != null) {
-      // Manual editing - stop playback before the user grabs the timeline.
+      
       if (app.video && !app.video.paused) app.pause();
       this.drag = { mode: 'resize', k: rk, lastX: x, x, y, region };
-      // Coalesce the whole drag into ONE undo step: suppress per-move
-      // snapshots and keep the pre-drag state, committed on mouseup.
+      
+      
       this.model.suppressSnapshot = true;
       this._dragBefore = { cuts: this.model.cuts.slice(), deleted: this.model.deleted.slice() };
       e.preventDefault();
@@ -772,7 +783,7 @@ class Timeline {
     }
     this.drag = { mode: pan ? 'pan' : 'scrub', lastX: x, moved: false, x, y, region, shift: e.shiftKey };
     if (!pan) {
-      // Manual editing - stop playback before the user scrubs the timeline.
+      
       if (app.video && !app.video.paused) app.pause();
       this.setCursor(this.xToTime(x));
       if (this.onScrub) this.onScrub(this.cursor);
@@ -788,7 +799,7 @@ class Timeline {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     if (!this.drag) {
-      // Hover: show a resize cursor when over a kept|gray boundary.
+      
       const rk = this.regionAt(e.clientY - rect.top) === 'seg' ? this.resizeBoundaryAt(x) : null;
       this.canvas.style.cursor = rk != null ? 'ew-resize' : 'default';
       return;
@@ -818,29 +829,29 @@ class Timeline {
     this.drag = null;
   }
 
-  // Commit a single undo entry for the whole resize drag (mousedown -> mouseup)
-  // instead of one per mouse move. The per-move snapshots were suppressed, so
-  // the history tail is still the pre-drag state; pushing the current state now
-  // makes undo -> pre-drag and redo -> post-drag both correct.
+  
+  
+  
+  
   endResizeDrag() {
     if (!this._dragBefore) return;
     const before = this._dragBefore;
     this._dragBefore = null;
     this.model.suppressSnapshot = false;
-    // only record if the drag actually changed the model
+    
     if (!arraysEqual(this.model.cuts, before.cuts) || !arraysEqual(this.model.deleted, before.deleted)) {
       this.model.snapshot();
     }
   }
 
-  // Is boundary cuts[k] between a kept and a gray segment (draggable)?
+  
   resizableBoundary(k) {
     if (!this.model || k < 1 || k > this.model.cuts.length - 2) return false;
     const b = this.model.deleted;
     return b[k - 1] !== b[k];
   }
 
-  // Find the draggable boundary near pixel x, or null.
+  
   resizeBoundaryAt(x) {
     if (!this.model) return null;
     const t = this.xToTime(x);
@@ -869,7 +880,7 @@ class Timeline {
     if (this.onResize) this.onResize();
     this.cursor = snapped;
     app.seek(snapped);
-    // A consumed segment may leave the selection out of bounds - drop it.
+    
     if (this.selected && this.selected[1] >= this.model.cuts.length - 1) {
       this.selected = null;
       this.selectedAnchor = null;
@@ -880,22 +891,22 @@ class Timeline {
     }
     this.needsRender = true;
     this.tick();
-    if (res === 2) this.drag = null; // a segment was consumed, boundary gone
+    if (res === 2) this.drag = null; 
   }
 
   onWheel(e) {
     e.preventDefault();
     if (e.ctrlKey) {
-      // Ctrl + wheel zooms around the cursor position.
+      
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
       this.zoomAt(x, factor);
       return;
     }
-    // Plain wheel scrolls (pans) the timeline. Normalize the delta so a single
-    // mouse notch (deltaY ~100px) moves about 12% of the visible width, and
-    // trackpad deltas scroll proportionally and smoothly.
+    
+    
+    
     let dy = e.deltaY;
     let dx = e.deltaX;
     if (e.deltaMode === 1) { dy *= WHEEL_LINE_PX; dx *= WHEEL_LINE_PX; }
@@ -907,7 +918,7 @@ class Timeline {
     this.tick();
   }
 
-  // ---------- rendering ----------
+  
 
   tick() {
     if (this.needsRender) {
@@ -941,7 +952,7 @@ class Timeline {
     this.renderSelection(ctx);
     this.renderResizeHandles(ctx, viewEnd);
     this.renderRuler(ctx);
-    // separator first so the playhead draws over it (never cut by the line)
+    
     ctx.fillStyle = COLORS.separator;
     ctx.fillRect(0, RULER.y - 1, w, 1);
     this.renderPlayhead(ctx);
@@ -954,9 +965,9 @@ class Timeline {
     if (!idx.length) return;
     const top = SEG.y;
     const bottom = SEG.y + SEG.h;
-    // Selection is ONLY a light frame drawn on each selected chip's own rounded
-    // outline (no fill) so the block background stays unchanged and nothing
-    // pokes out past the rounded edge.
+    
+    
+    
     const stroke = this.model.deleted[idx[0]] ? COLORS.selectionGray : COLORS.selectionKept;
     ctx.strokeStyle = stroke;
     ctx.lineWidth = 2;
@@ -971,13 +982,13 @@ class Timeline {
     }
   }
 
-  // Small "< >" handles on kept|gray boundaries - drag to extend the blue
-  // segment into the adjacent gray one.
+  
+  
   renderResizeHandles(ctx, viewEnd) {
     if (!this.model) return;
     const cuts = this.model.cuts;
-    // Only draw handles at a sane zoom: with 100k+ visible cuts the handles are
-    // sub-pixel and drawing them would stall the frame.
+    
+    
     if (binaryFirst(cuts, viewEnd) - Math.max(0, binaryFirst(cuts, this.viewStart) - 1) > 2000) return;
     const first = Math.max(1, binaryFirst(cuts, this.viewStart) - 1);
     const last = Math.min(cuts.length - 2, binaryFirst(cuts, viewEnd) + 1);
@@ -1001,12 +1012,12 @@ class Timeline {
     const model = this.model;
     const cuts = model.cuts;
 
-    // visible cut index range via binary search (culling)
+    
     const first = Math.max(0, binaryFirst(cuts, this.viewStart) - 1);
     const last = Math.min(cuts.length - 1, binaryFirst(cuts, viewEnd));
     const visibleCount = last - first;
 
-    // aggregate mode for pathologically dense zoom-outs
+    
     if (visibleCount > RENDER_CAP) {
       this.renderSegmentsAggregated(ctx, viewEnd, y, h);
       return;
@@ -1030,8 +1041,8 @@ class Timeline {
         if (!this.hatch) this.makeHatch();
         ctx.fillStyle = this.hatch;
         ctx.fill();
-        // Permanent dim outline so gray blocks always read as blocks, even
-        // without a selection.
+        
+        
         ctx.strokeStyle = COLORS.segDeletedFrame;
         ctx.lineWidth = 1.5;
         ctx.stroke();
@@ -1044,7 +1055,7 @@ class Timeline {
       }
     }
 
-    // internal cut lines only (same-type neighbours), inset inside the blocks
+    
     for (let k = first + 1; k < last; k++) {
       if (model.deleted[k - 1] === model.deleted[k]) {
         const x = this.timeToX(cuts[k]);
@@ -1060,9 +1071,9 @@ class Timeline {
     const n = runs.length;
     ctx.fillStyle = COLORS.segDeleted;
     ctx.fillRect(0, y, this.w, h);
-    // Merge runs at pixel resolution: with 100k+ runs (10h lectures) drawing
-    // each as its own rect would be far too slow, but at this zoom-out the
-    // chips are sub-pixel anyway, so adjacent kept columns collapse into one.
+    
+    
+    
     let cs = -1, ce = -1;
     const flush = () => {
       const g = ctx.createLinearGradient(0, y, 0, y + h);
@@ -1110,10 +1121,10 @@ class Timeline {
     if (!keys || !keys.length || !this.model) return;
     const cuts = this.model.cuts;
     const pps = this.pxPerSec;
-    // Draw per pixel column, not per keyframe: at zoom-out a column contains
-    // many keys, and drawing one line per column bounds the work by the canvas
-    // width regardless of how many keyframes exist (10h lectures, 1M cuts).
-    // A column is "bright" when a cut boundary lands on it.
+    
+    
+    
+    
     const lineH = SEG.h * 0.98;
     const top = SEG.y + (SEG.h - lineH) / 2;
     const bottom = top + lineH;
@@ -1166,7 +1177,7 @@ class Timeline {
       ctx.fillStyle = COLORS.rulerTick;
     }
 
-    // zoomed-out ticks
+    
     const minor = step / 5;
     if (minor * this.pxPerSec >= 4) {
       ctx.fillStyle = COLORS.rulerMinor;
@@ -1186,7 +1197,7 @@ class Timeline {
     ctx.lineTo(x, this.h - 2);
     ctx.stroke();
 
-    // handle
+    
     ctx.fillStyle = COLORS.playhead;
     ctx.beginPath();
     ctx.moveTo(x - 7, 2);
@@ -1207,7 +1218,7 @@ function niceStep(target) {
   return 86400 * Math.ceil(target / 86400);
 }
 
-// ---------- App ----------
+
 
 const app = {
   state: {
@@ -1240,7 +1251,9 @@ const app = {
     this.model.onMutate = () => this.markDirty();
     this.timeline = new Timeline($('timeline'), {
       scrollbar: $('timeline-scrollbar'),
-      thumb: $('scrollbar-thumb')
+      thumb: $('scrollbar-thumb'),
+      handleL: $('scrollbar-handle-l'),
+      handleR: $('scrollbar-handle-r')
     });
     this.timeline.onZoom = (pps) => {
       const zr = $('zoom-range');
@@ -1257,14 +1270,14 @@ const app = {
     this.bindVideo();
     this.bindKeys();
 
-    // Ask before closing with unsaved edits (the main process defers close).
+    
     window.keycut.onCloseRequest(() => this.handleCloseRequest());
 
     this.setVideoEnabled(false);
     this.setStatus('Ready');
 
-    // A file passed by the OS (e.g. double-click on a .kc project, "Open with")
-    // is loaded the same way as drag-and-drop.
+    
+    
     window.keycut.getOpenFile().then((p) => {
       if (p) this.handleDroppedFile(p);
     }).catch(() => {});
@@ -1288,13 +1301,7 @@ const app = {
   },
 
   async handleDroppedFile(p) {
-    const name = p.split(/[\\/]/).pop();
-    if (this.state.source) {
-      const ok = await window.keycut.confirmOpen(
-        'You are already working on a project.\nOpen "' + name + '" anyway? Unsaved changes will be lost.'
-      );
-      if (!ok) { this.setStatus('Open cancelled'); return; }
-    }
+    if (!await this.confirmDiscardIfDirty()) { this.setStatus('Open cancelled'); return; }
     this.scrubEnd();
     if (/\.kc$/i.test(p)) await this.openProjectFromPath(p);
     else await this.loadSource(p);
@@ -1321,7 +1328,7 @@ const app = {
     $('btn-zoom-in').addEventListener('click', () => { zr.value = Math.min(100, +zr.value + 8); zr.dispatchEvent(new Event('input')); });
     $('btn-zoom-out').addEventListener('click', () => { zr.value = Math.max(0, +zr.value - 8); zr.dispatchEvent(new Event('input')); });
 
-    // Keep keyboard shortcuts working: clicking a button must not trap focus.
+    
     window.addEventListener('click', (e) => {
       if (e.target && e.target.tagName === 'BUTTON') e.target.blur();
     });
@@ -1329,9 +1336,9 @@ const app = {
 
   bindVideo() {
     this.video.addEventListener('loadedmetadata', () => {
-      // The container's real duration may be longer than the parsed one
-      // (under-reported mdhd, or a longer audio track). Make the timeline
-      // match what actually plays.
+      
+      
+      
       const vd = this.video.duration;
       if (this.state.source && Number.isFinite(vd) && vd > 0 && vd > this.state.duration + DUR_EXTEND_MARGIN) {
         this.state.duration = vd;
@@ -1376,8 +1383,8 @@ const app = {
     });
   },
 
-  // High-frequency playback guard (rAF, ~16ms). Catches dimmed (gray) segments
-  // almost immediately, so only a tiny, inaudible sliver of gray audio can leak.
+  
+  
   startPlaybackGuard() {
     if (this._pg) return;
     const tick = () => {
@@ -1395,17 +1402,17 @@ const app = {
     const g = this.guardTarget(this.video.currentTime);
     if (g) {
       if (g.type === 'pause') {
-        // Stop at the last kept frame (just before the cut-out tail).
+        
         this.skipTo(Math.max(0, g.at - SEEK_EPS), true);
       } else {
-        // Jump to the next kept start keyframe. Seeking to the exact keyframe
-        // plays every sample of the kept segment; the boundary belongs to the
-        // segment starting there.
+        
+        
+        
         this.skipTo(g.at, false);
       }
       return;
     }
-    // While playing the caret follows the video smoothly (not snapped).
+    
     const t = this.video.currentTime;
     if (Math.abs(t - this.state.cursor) > CARET_UPDATE_MS) {
       this.state.cursor = t;
@@ -1417,9 +1424,9 @@ const app = {
     }
   },
 
-  // Keep the playhead in frame: if the caret leaves the visible area (dead
-  // zone 10%..90% of the view width), pan the timeline so it comes back.
-  // Standard editor behavior - the timeline follows the playhead.
+  
+  
+  
   ensureCursorVisible() {
     if (!this.timeline) return;
     const viewW = this.timeline.w / this.timeline.pxPerSec;
@@ -1436,10 +1443,10 @@ const app = {
     this.timeline.tick();
   },
 
-// Seek while playing without leaking the pre-seek (gray) audio: mute for the
-// duration of the async seek, then restore the previous mute state. Robust to
-// overlapping/rapid skips: the original mute state is captured once and always
-// restored, so a second skipTo before 'seeked' cannot leave the video muted.
+
+
+
+
   skipTo(t, pauseAfter) {
     if (this._unmute) this.video.removeEventListener('seeked', this._unmute);
     if (!this._mutedBySkip) {
@@ -1467,27 +1474,27 @@ const app = {
     }
   },
 
-// If playback is on a dimmed (gray) frame, return where to go next:
-// { type: 'seek', at } to jump over a mid gray run, or { type: 'pause', at }
-// when everything to the end is cut out. Returns null when on a kept frame.
+
+
+
 guardTarget(t) {
     const cuts = this.model.cuts;
-    // Classify the time with a +EPS nudge: after an exact seek to a kept start
-    // the browser may read back a hair below it, which must still be that kept
-    // segment (never re-trigger the guard and skip the kept audio). But a point
-    // genuinely inside the kept tail just before a gray boundary is still kept,
-    // so the tail plays out fully.
-    const i = this.model.segmentOf(t + SEEK_EPS); // boundary frames belong to the segment starting there
+    
+    
+    
+    
+    
+    const i = this.model.segmentOf(t + SEEK_EPS); 
     if (i < this.model.deleted.length && this.model.deleted[i]) {
-      // Only fire when t is really in the gray run, not merely nudged into it
-      // (t is in the kept tail just before the gray boundary).
+      
+      
       if (t < cuts[i]) {
         const prev = this.model.segmentOf(t);
         if (prev < this.model.deleted.length && !this.model.deleted[prev]) return null;
       }
       let j = i;
       while (j < this.model.deleted.length && this.model.deleted[j]) j++;
-      const end = cuts[j]; // first kept keyframe of the run we jump into
+      const end = cuts[j]; 
       if (end >= this.state.duration - SEEK_EPS) return { type: 'pause', at: cuts[i] };
       return { type: 'seek', at: end };
     }
@@ -1507,8 +1514,8 @@ guardTarget(t) {
       if (e.code === 'KeyX' || e.code === 'Delete' || e.code === 'Backspace') { e.preventDefault(); this.cancelStepPause(); this.deleteSegment(); return; }
       if (e.code === 'KeyR') { e.preventDefault(); this.cancelStepPause(); this.restoreSegment(); return; }
       if (e.code === 'KeyV') { e.preventDefault(); this.cancelStepPause(); this.mergeSelected(); return; }
-      // Frame navigation: tap steps with a short pause; holding scans the
-      // caret continuously and resumes on release (playback mode only).
+      
+      
       if (e.code === 'KeyS' || e.code === 'ArrowLeft') {
         e.preventDefault();
         if (!e.repeat) this.handleFrameNav(-1);
@@ -1557,7 +1564,7 @@ guardTarget(t) {
   updateTimeDisplay() {
     $('time-current').textContent = fmtTime(this.state.cursor, true);
     $('time-total').textContent = fmtTime(this.state.duration, true);
-    // live percentage of the material we're at, same / format as the clocks
+    
     const d = this.state.duration;
     if (d > 0) $('time-pct').textContent = Math.round((Math.min(Math.max(0, this.state.cursor), d) / d) * 100) + '%';
     else $('time-pct').textContent = '';
@@ -1583,9 +1590,9 @@ guardTarget(t) {
     this.setVideoEnabled(true);
   },
 
-  // Caret snap points: every cut boundary plus keyframes inside kept (blue)
-  // segments. Interior keyframes of a dimmed (gray) area are NOT snap points -
-  // the whole gray region behaves as one non-playable unit.
+  
+  
+  
   refreshActiveKeys() {
     const cuts = this.model.cuts;
     const deleted = this.model.deleted;
@@ -1604,14 +1611,14 @@ guardTarget(t) {
     if (this.timeline) this.timeline.activeKeys = arr;
   },
 
-  // Audio scrubbing (Premiere-style): while dragging over the timeline, play a
-  // short snippet of the keyframe right at the cursor. Only for kept segments.
+  
+  
   scrubBlip(t) {
     if (!this.state.source || this.video && !this.video.paused) return;
     if (this.frameDeleted(t)) return;
     if (Math.abs(t - this.lastScrubTime) < 1e-4) return;
-    // Throttle rapid blips so dense keyframes / fast scrubbing don't cause a
-    // storm of audio re-seeks; stays audibly coherent.
+    
+    
     const now = performance.now();
     if (this._lastBlipStamp && now - this._lastBlipStamp < BLIP_MS) return;
     this._lastBlipStamp = now;
@@ -1645,8 +1652,8 @@ guardTarget(t) {
     $('video-placeholder').style.display = on ? 'none' : 'flex';
   },
 
-  // One "Open" action: the dialog accepts both media and .kc projects, the
-  // extension decides which loader handles it.
+  
+  
   async openFile() {
     const p = await window.keycut.openFile();
     if (!p) return;
@@ -1654,36 +1661,36 @@ guardTarget(t) {
   },
 
   async openPath(p) {
-    if (!this.confirmDiscardIfDirty()) return;
+    if (!await this.confirmDiscardIfDirty()) return;
     if (/\.kc$/i.test(p)) await this.openProjectFromPath(p);
     else await this.loadSource(p);
   },
 
-  // If the project has unsaved edits, ask the user what to do. Returns false
-  // when the action should be aborted (Cancel). Save = save then continue,
-  // discard = continue without saving, cancel = stop.
+  
+  
+  
   async confirmDiscardIfDirty() {
     if (!this.state.dirty || !this.state.source) return true;
     const choice = await window.keycut.confirmClose();
     if (choice === 'save') {
       await this.saveProject();
-      return !this.state.dirty; // save failed/cancelled -> abort
+      return !this.state.dirty; 
     }
     return choice === 'discard';
   },
 
-  // The OS is closing the window: save/discard/cancel before it happens.
+  
   async handleCloseRequest() {
     if (!this.state.dirty) { window.keycut.forceClose(); return; }
     const choice = await window.keycut.confirmClose();
     if (choice === 'save') {
       await this.saveProject();
-      if (this.state.dirty) return; // save cancelled/failed -> stay open
+      if (this.state.dirty) return; 
       window.keycut.forceClose();
     } else if (choice === 'discard') {
       window.keycut.forceClose();
     }
-    // 'cancel' -> stay
+    
   },
 
   async loadSource(path) {
@@ -1712,14 +1719,14 @@ guardTarget(t) {
   },
 
   $labelUpdate() {
-    // The edited file name lives in the OS title bar, not in the page body.
+    
     const label = this.state.source ? this.state.source.split(/[\\/]/).pop() : '';
     const star = this.state.dirty ? '* ' : '';
     document.title = star + (label ? 'KeyCut — ' + label : 'KeyCut');
   },
 
-  // Any model mutation marks the project dirty (asterisk in the title) until
-  // the project is saved.
+  
+  
   markDirty() {
     if (!this.state.dirty) {
       this.state.dirty = true;
@@ -1730,14 +1737,14 @@ guardTarget(t) {
   togglePlay() {
     if (!this.state.source) return;
     if (this.video.paused) {
-      // Never auto-restart from the beginning; if the tail is cut out the
-      // user simply stops (they can seek back manually).
+      
+      
       if (this.video.ended) return;
-      // Start from the first kept (blue) frame at the caret - no flash of
-      // cut-out content. Always seek the media element to the computed start,
-      // even when state.cursor already equals it: after loading a project the
-      // video's internal position can differ from the app cursor, and playing
-      // without a seek would start from wherever the element happens to be.
+      
+      
+      
+      
+      
       const start = this.firstKeptTime(this.state.cursor);
       if (start >= this.state.duration - SEEK_EPS) return;
       this.seek(start);
@@ -1747,8 +1754,8 @@ guardTarget(t) {
     }
   },
 
-// Earliest time >= t whose frame is in a kept (blue) segment. Skips the whole
-// consecutive dimmed run and returns its first kept keyframe.
+
+
 firstKeptTime(t) {
   if (!this.frameDeleted(t)) return t;
   let i = this.model.segmentOf(t);
@@ -1756,8 +1763,8 @@ firstKeptTime(t) {
   return this.model.cuts[i];
 },
 
-// Whether the frame at time t belongs to a dimmed (gray) segment. A frame
-// sitting exactly on a cut boundary belongs to the segment that starts there.
+
+
 frameDeleted(t) {
   const i = this.model.segmentOf(t);
   return !!this.model.deleted[i];
@@ -1767,9 +1774,9 @@ frameDeleted(t) {
     if (!this.video.paused) this.video.pause();
   },
 
-  // seek to time (called by timeline scrub, resize, cut). Does NOT auto-pan the
-// timeline here: scrubbing places the caret under the cursor, and auto-panning
-// during a drag would fight the mouse (feedback loop).
+  
+
+
   seek(t) {
     this.state.cursor = t;
     if (this.video.readyState > 0) {
@@ -1780,7 +1787,7 @@ frameDeleted(t) {
 
   cut() {
     if (!this.state.source) return;
-    // Even from a smooth caret, the cut lands on the nearest keyframe.
+    
     const t = snapKey(this.state.cursor, this.state.activeKeys || this.state.keyTimes);
     const before = this.timeline.captureCornerTargets();
     if (this.model.split(t)) {
@@ -1796,15 +1803,15 @@ frameDeleted(t) {
     }
   },
 
-  // indices of the segments to act on: the (multi) selection, or the one under
-  // the cursor
+  
+  
   activeIndices() {
     const s = this.timeline.selectionIndices();
     if (s.length) return s;
     return [this.model.segmentOf(this.state.cursor)];
   },
 
-  // X / Delete: dim the selected segment(s) (keep them on the timeline).
+  
   deleteSegment() {
     if (!this.state.source) return;
     const idx = this.activeIndices();
@@ -1819,7 +1826,7 @@ frameDeleted(t) {
     }
   },
 
-  // R: restore dimmed segment(s).
+  
   restoreSegment() {
     if (!this.state.source) return;
     const idx = this.activeIndices();
@@ -1834,15 +1841,15 @@ frameDeleted(t) {
     }
   },
 
-  // V: merge the selected adjacent blocks back into one whole block.
-  // Works for kept (blue) and dimmed (gray) blocks alike.
+  
+  
   mergeSelected() {
     if (!this.state.source) return;
     const idx = this.activeIndices().sort((a, b) => a - b);
     let a = idx[0];
     let b = idx[idx.length - 1];
-    // Single selection: merge with the next adjacent block (merging needs at
-    // least two neighbours, and they must be the same type to join).
+    
+    
     if (a === b) b = a + 1;
     const before = this.timeline.captureCornerTargets();
     if (this.model.mergeRange(a, b)) {
@@ -1882,7 +1889,7 @@ frameDeleted(t) {
     if (s && (s[0] < 0 || s[1] >= this.model.cuts.length - 1)) {
       this.timeline.selectedIndex = null;
     }
-    // drop any multi-selection indices that no longer exist after the edit
+    
     const set = this.timeline.selectedSet;
     if (set) {
       const valid = [...set].filter((i) => i >= 0 && i < this.model.deleted.length);
@@ -1914,15 +1921,15 @@ frameDeleted(t) {
     if (idx < keys.length) this.seekTo(keys[idx]);
   },
 
-  // Pause playback before a transport/navigation jump (consistent with
-  // scrub-stops-playback) and then run the action.
+  
+  
   navPause(fn) {
     if (this.video && !this.video.paused) this.pause();
     this.cancelStepPause();
     fn.call(this);
   },
 
-  // Jump to the start of the next kept (blue) block after the caret.
+  
   nextBlock() {
     const runs = this.model.keptRuns();
     const t = this.state.cursor;
@@ -1932,7 +1939,7 @@ frameDeleted(t) {
     this.setStatus('No next block');
   },
 
-  // Jump to the start of the previous kept (blue) block before the caret.
+  
   prevBlock() {
     const runs = this.model.keptRuns();
     const t = this.state.cursor;
@@ -1944,13 +1951,13 @@ frameDeleted(t) {
     else this.setStatus('No previous block');
   },
 
-// Frame navigation with tap + hold support.
-//   Tap (quick press+release) while playing: step one keyframe, pause
-//   STEP_PAUSE_MS so the rewind is visible, then resume. Repeated taps restart
-//   the pause.
-//   Hold: the caret moves smoothly by TIME (not keyframes) while held; on
-//   release playback resumes from the start of the keyframe the cursor is on
-//   (only if we came from playback, not a manual pause).
+
+
+
+
+
+
+
 handleFrameNav(dir) {
   const back = dir < 0;
   const wasPlaying = this.video && !this.video.paused;
@@ -1958,7 +1965,7 @@ handleFrameNav(dir) {
   this.cancelStepPause();
   if (wasPlaying && back) this.pause();
   if (dir < 0) this.prevKeyframe(); else this.nextKeyframe();
-  // brief audio blip so you can hear what piece comes next
+  
   this.scrubBlip(this.state.cursor);
   this._scan = { dir, back, playing: wasPlaying || inSession, held: false };
   this._holdTimer = setTimeout(() => {
@@ -1984,7 +1991,7 @@ scanTick() {
   this.timeline.cursor = target;
   this.timeline.needsRender = true;
   this.timeline.tick();
-  // keep a short audio preview playing while scanning
+  
   this.scrubBlip(target);
   if (Math.abs(target - this._scan.lastSeek) > SCAN_SEEK_MS) {
     this._scan.lastSeek = target;
@@ -1993,8 +2000,8 @@ scanTick() {
   }
 },
 
-// Scan speed in seconds of video per second of holding, derived from the
-// average keyframe spacing.
+
+
 scanSpeedForProject() {
   const keys = this.state.keyTimes || [];
   const dur = this.state.duration;
@@ -2013,10 +2020,10 @@ releaseFrameNav() {
   clearInterval(this._scanInterval);
   this._scanInterval = null;
   if (!scan) return;
-  this.scrubEnd(); // stop the scan blip audio
+  this.scrubEnd(); 
   if (scan.held) {
-    // Long press: resume from the START of the keyframe the cursor is on
-    // (even if the cursor is closer to the end of that keyframe's interval).
+    
+    
     if (scan.playing && this.state.source) {
       const keys = this.state.activeKeys || this.state.keyTimes;
       const kf = lastKeyAtOrBefore(this.state.cursor, keys);
@@ -2024,7 +2031,7 @@ releaseFrameNav() {
       if (this.video.paused && !this.video.ended) this.togglePlay();
     }
   } else if (scan.playing && scan.back) {
-    // Tap: small pause, then resume (restarts on repeated taps).
+    
     this._stepPause = true;
     clearTimeout(this.resumeTimer);
     this.resumeTimer = setTimeout(() => {
@@ -2135,9 +2142,9 @@ releaseFrameNav() {
       keyTimes: data.keys && data.keys.length ? data.keys : meta.keyTimes
     });
 
-    // Restore the saved view: zoom level and the keyframe we left the cursor
-    // on. When the cursor sits mid-video, centre it; at the very start/end just
-    // show the edge.
+    
+    
+    
     const tl = this.timeline;
     if (data.zoom > 0) tl.pxPerSec = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, data.zoom));
     const c = Math.min(Math.max(0, data.cursor || 0), duration);

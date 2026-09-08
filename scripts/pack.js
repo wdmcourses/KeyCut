@@ -1,7 +1,7 @@
-// Builds portable app bundles for win32 / linux / darwin.
-//   node scripts/pack.js                          # current host platform
-//   node scripts/pack.js --platform=win32|linux|darwin [--arch=x64|arm64]
-// Outputs dist/KeyCut-<platform>-<arch>/ plus a .zip / .tar.gz archive.
+
+
+
+
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
@@ -26,8 +26,8 @@ function target() {
 }
 
 function copy(src, dest) {
-  // cpSync preserves symlinks (verbatimSymlinks) which the macOS .app bundle
-  // needs (Framework Versions/Current -> A).
+  
+  
   try {
     fs.cpSync(src, dest, { recursive: true, verbatimSymlinks: true });
     return;
@@ -55,10 +55,10 @@ async function download(url, outFile) {
   console.log('Saved', (fs.statSync(outFile).size / 1048576).toFixed(1), 'MB');
 }
 
-// Electron runtime for the target platform: reuse the installed one when it
-// matches the host, otherwise download the official zip.
-// 7-Zip preserves symlinks (needed by the macOS .app bundle); unzip on Windows
-// materializes them as plain dirs and breaks the framework links.
+
+
+
+
 function extractZip(zip, out, platform) {
   if (platform === 'darwin') {
     const sevens = [
@@ -68,18 +68,18 @@ function extractZip(zip, out, platform) {
     ];
     for (const sz of sevens) {
       if (sz && require('fs').existsSync(sz)) {
-        // 7z exits non-zero on "dangerous link" warnings but still extracts the
-        // bundle with its framework symlinks intact - treat as success.
+        
+        
         try {
           execFileSync(sz, ['x', '-y', '-o' + out, zip], { cwd: ROOT, stdio: 'ignore' });
         } catch {
-          /* keep going; marker check decides */
+          
         }
         return;
       }
     }
   }
-  // bsdtar can't read zip on Windows; unzip is the fallback.
+  
   execFileSync('unzip', ['-q', path.relative(ROOT, zip), '-d', path.relative(ROOT, out)], { cwd: ROOT, stdio: 'inherit' });
 }
 
@@ -95,8 +95,8 @@ async function electronDist(platform, arch) {
   const marker = platform === 'darwin'
     ? path.join(out, 'Electron.app', 'Contents', 'Info.plist')
     : path.join(out, 'resources');
-  // re-extract when missing or incomplete (an earlier failed run may have left
-  // an empty dir)
+  
+  
   if (!fs.existsSync(out) || !fs.existsSync(marker)) {
     fs.mkdirSync(buildsDir, { recursive: true });
     if (!fs.existsSync(zip)) {
@@ -133,7 +133,7 @@ async function main() {
   const ffmpeg = await ffmpegFor(platform);
   const exeName = platform === 'darwin' ? 'KeyCut.app' : cfg.newBin;
 
-  // macOS: the electron zip contains Electron.app.
+  
   if (platform === 'darwin') {
     const appIn = path.join(DIST, 'Electron.app');
     const appOut = path.join(DIST, 'KeyCut.app');
@@ -146,7 +146,7 @@ async function main() {
     fs.copyFileSync(ffmpeg, path.join(resDir, cfg.ffmpegBin));
     fs.writeFileSync(path.join(resDir, 'app', 'portable.txt'), 'KeyCut portable build\n');
 
-    // Rename the app binary and patch Info.plist so it shows and runs as KeyCut.
+    
     const macBin = path.join(appOut, 'Contents', 'MacOS', 'Electron');
     const macBinOut = path.join(appOut, 'Contents', 'MacOS', 'KeyCut');
     if (fs.existsSync(macBin) && !fs.existsSync(macBinOut)) fs.renameSync(macBin, macBinOut);
@@ -190,7 +190,7 @@ async function main() {
     }
   }
 
-  // archive
+  
   const label = path.basename(DIST);
   const cwd = path.join(ROOT, 'dist');
   if (cfg.archive === 'zip') {

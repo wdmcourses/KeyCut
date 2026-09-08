@@ -1,25 +1,25 @@
-/* ---------- Design tokens ---------- */
+
 :root {
-  /* base surfaces */
+  
   --bg: #141619;
   --bg-deep: #0d0f12;
   --panel: #1b1e23;
   --panel-2: #22262c;
   --border: #2a2f36;
 
-  /* text */
+  
   --text: #e8eaed;
   --text-dim: #9aa2ab;
   --text-faint: #6b7280;
 
-  /* accent */
+  
   --accent: #3fa2ff;
   --accent-strong: #5cb2ff;
   --accent-soft: rgba(63,162,255,.3);
   --danger: #e5534b;
   --on-accent: #0a1622;
 
-  /* media markers */
+  
   --keyframe: #ffd166;
   --keyframe-bright: rgba(255,209,102,.95);
   --keyframe-dim: rgba(255,209,102,.4);
@@ -27,16 +27,16 @@
   --keyframe-gray-dim: rgba(255,209,102,.12);
   --playhead: #ffffff;
 
-  /* controls */
+  
   --control-hover: #2a2f37;
   --control-hover-border: #39404a;
 
-  /* video area */
+  
   --video-bg: #07080a;
   --video-border: #1c1f24;
   --video-placeholder-hi: #101318;
 
-  /* timeline */
+  
   --timeline-bg: #101216;
   --seg-kept-from: #4aa8ff;
   --seg-kept-to: #2f8ef0;
@@ -47,13 +47,13 @@
   --hatch: rgba(0,0,0,.45);
   --separator: #24282e;
 
-  /* ruler */
+  
   --ruler-bg: #15171b;
   --ruler-tick: #4a5058;
   --ruler-tick-minor: #33383f;
   --ruler-label: #6b7280;
 
-  /* scrollbar */
+  
   --scrollbar-track: #15171b;
   --scrollbar-thumb: #2a2f37;
   --scrollbar-grip: rgba(0,0,0,.32);
@@ -61,12 +61,12 @@
   --scrollbar-caret-hover: rgba(0,0,0,.45);
   --scrollbar-chevron: #9aa2ab;
 
-  /* overlays & shadows */
+  
   --drag-overlay: rgba(18,20,24,.82);
   --shadow-video: rgba(0,0,0,.45);
   --shadow-panel: rgba(0,0,0,.35);
 
-  /* radius scale: small / medium (buttons) / large / default panels */
+  
   --radius-sm: 6px;
   --radius-md: 7px;
   --radius-lg: 12px;
@@ -89,7 +89,7 @@ body {
   font-size: 13px;
 }
 
-/* ---------- Buttons & controls ---------- */
+
 
 .toolbar-btn {
   background: var(--panel-2);
@@ -114,7 +114,7 @@ body {
 }
 .toolbar-btn.primary:hover { filter: brightness(1.06); }
 
-/* Compact action buttons (sits in the player controls row). */
+
 .toolbar-btn.compact {
   padding: 5px 12px;
   font-size: 12.5px;
@@ -134,7 +134,7 @@ body {
   color: var(--text-dim);
 }
 
-/* ---------- Content ---------- */
+
 
 #content {
   flex: 1 1 auto;
@@ -220,7 +220,7 @@ body {
 .ctrl-btn:focus, .ctrl-btn:focus-visible { outline: none; }
 .ctrl-btn:hover { background: var(--control-hover); border-color: var(--control-hover-border); }
 .ctrl-btn:disabled { opacity: .4; cursor: default; }
-/* Play is the same size as the rest, just accented. */
+
 .ctrl-btn.play-btn {
   background: linear-gradient(180deg, var(--accent-strong), var(--accent));
   border: none;
@@ -228,7 +228,7 @@ body {
 }
 .ctrl-btn.play-btn:hover { filter: brightness(1.08); }
 
-/* Transport sits centered under the video; time stays left, actions right. */
+
 .transport {
   position: absolute;
   left: 50%;
@@ -253,7 +253,7 @@ body {
 .spacer { flex: 1 1 auto; }
 .action-buttons { margin-left: auto; }
 
-/* ---------- Timeline ---------- */
+
 
 #timeline-section {
   flex: 0 0 auto;
@@ -291,7 +291,6 @@ body {
   top: 3px;
   bottom: 3px;
   left: 0;
-  min-width: 120px;
   border-radius: var(--radius);
   background: var(--scrollbar-thumb);
   cursor: grab;
@@ -299,7 +298,7 @@ body {
 }
 #scrollbar-thumb:hover, #scrollbar-thumb.dragging { background: var(--accent); }
 
-/* centre grip - three vertical lines identifying the middle of the range */
+
 #scrollbar-grip {
   position: absolute;
   top: 5px;
@@ -312,7 +311,7 @@ body {
   box-shadow: -4px 0 0 var(--scrollbar-grip), 4px 0 0 var(--scrollbar-grip);
 }
 
-/* left/right carets - grab to resize (zoom) the visible range */
+
 #scrollbar-handle-l, #scrollbar-handle-r {
   position: absolute;
   top: 0;
@@ -360,7 +359,7 @@ body {
 #stats { margin-left: auto; color: var(--text-faint); font-size: 12px; display: flex; gap: 14px; }
 #stats b { color: var(--text-dim); font-weight: 600; }
 
-/* ---------- Status bar ---------- */
+
 
 #statusbar {
   height: 30px;
