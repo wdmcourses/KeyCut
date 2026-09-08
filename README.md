@@ -52,7 +52,7 @@ In OBS, record with frequent keyframes: add `keyint=6` to the x264/x265 encoder 
 ## Download
 
 Builds are published on the [Releases](https://github.com/wdmcourses/KeyCut/releases)
-page. Download the archive, extract and run `KeyCut.exe`.
+page. Download the archive, extract and run `KeyCut`.
 
 ## Building from source
 
