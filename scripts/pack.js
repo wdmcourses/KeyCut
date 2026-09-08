@@ -217,7 +217,7 @@ async function main() {
     execFileSync('python', [path.join(ROOT, 'scripts', 'make-zip.py'), dirPath, zipPath], { stdio: 'inherit' });
   } else {
     fs.rmSync(path.join(cwd, label + '.tar.gz'), { force: true });
-    execFileSync('tar', ['-czf', label + '.tar.gz', label], { cwd, stdio: 'inherit' });
+    execFileSync('python', [path.join(ROOT, 'scripts', 'make-tar.py'), DIST, path.join(cwd, label + '.tar.gz')], { cwd: ROOT, stdio: 'inherit' });
   }
 
   console.log('Build ready at', DIST);
