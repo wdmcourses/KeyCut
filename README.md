@@ -37,7 +37,7 @@ output keeps the original quality and the whole operation is fast.</p>
 | X / R | Delete / restore segment |
 | V | Merge segments |
 | Alt + click | Multi-select segments |
-| Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
+| Ctrl+Z / Ctrl+Shift+Z | Undo / Redo |
 | Ctrl+O / Ctrl+S | Open / save project |
 | Ctrl+E | Export |
 
