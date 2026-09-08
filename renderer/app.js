@@ -783,6 +783,7 @@ class Timeline {
       return;
     }
     this.drag = { mode: pan ? 'pan' : 'scrub', lastX: x, moved: false, x, y, region, shift: e.shiftKey };
+    if (pan) this.canvas.style.cursor = 'grabbing';
     if (!pan) {
       
       if (app.video && !app.video.paused) app.pause();
@@ -820,6 +821,8 @@ class Timeline {
       }
     }
     this.drag.lastX = x;
+    if (this.drag.mode === 'pan') this.canvas.style.cursor = 'grabbing';
+    else if (this.drag.mode === 'resize') this.canvas.style.cursor = 'ew-resize';
     this.needsRender = true;
     this.tick();
   }
@@ -828,6 +831,7 @@ class Timeline {
     if (this.drag && this.drag.mode === 'scrub' && this.onScrubEnd) this.onScrubEnd();
     this.endResizeDrag();
     this.drag = null;
+    this.canvas.style.cursor = 'default';
   }
 
   
@@ -1325,6 +1329,11 @@ const app = {
     $('btn-nextblock').addEventListener('click', () => this.navPause(() => this.nextBlock()));
     $('btn-prevkf').addEventListener('click', () => this.navPause(() => this.prevKeyframe()));
     $('btn-nextkf').addEventListener('click', () => this.navPause(() => this.nextKeyframe()));
+    $('btn-help').addEventListener('click', () => this.toggleHelp());
+    $('help-modal-close').addEventListener('click', () => $('help-modal').classList.add('hidden'));
+    $('help-modal').addEventListener('click', (e) => {
+      if (e.target === $('help-modal')) $('help-modal').classList.add('hidden');
+    });
 
     const zr = $('zoom-range');
     zr.addEventListener('input', () => {
@@ -1520,19 +1529,28 @@ guardTarget(t) {
       if (e.code === 'KeyX' || e.code === 'Delete' || e.code === 'Backspace') { e.preventDefault(); this.cancelStepPause(); this.deleteSegment(); return; }
       if (e.code === 'KeyR') { e.preventDefault(); this.cancelStepPause(); this.restoreSegment(); return; }
       if (e.code === 'KeyV') { e.preventDefault(); this.cancelStepPause(); this.mergeSelected(); return; }
+      if (e.code === 'BracketLeft') { e.preventDefault(); this.navPause(() => this.seekTo(0)); return; }
+      if (e.code === 'BracketRight') { e.preventDefault(); this.navPause(() => this.seekTo(this.state.duration)); return; }
       
       
       if (e.code === 'KeyS' || e.code === 'ArrowLeft') {
         e.preventDefault();
+        if (e.shiftKey) { this.navPause(() => this.prevBlock()); return; }
         if (!e.repeat) this.handleFrameNav(-1);
         return;
       }
       if (e.code === 'KeyF' || e.code === 'ArrowRight') {
         e.preventDefault();
+        if (e.shiftKey) { this.navPause(() => this.nextBlock()); return; }
         if (!e.repeat) this.handleFrameNav(+1);
         return;
       }
-      if (e.code === 'Escape') { this.cancelStepPause(); this.pause(); }
+      if (e.code === 'Escape') {
+        this.cancelStepPause();
+        const hm = $('help-modal');
+        if (hm && !hm.classList.contains('hidden')) { hm.classList.add('hidden'); return; }
+        this.pause();
+      }
     });
     window.addEventListener('keyup', (e) => {
       if (e.code === 'KeyS' || e.code === 'KeyF' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
@@ -1544,6 +1562,10 @@ guardTarget(t) {
   setStatus(text, spin = false) {
     $('status-text').textContent = text;
     $('spinner').classList.toggle('hidden', !spin);
+  },
+
+  toggleHelp() {
+    $('help-modal').classList.toggle('hidden');
   },
 
   setProgress(p) {
@@ -1572,7 +1594,7 @@ guardTarget(t) {
     $('time-total').textContent = fmtTime(this.state.duration, true);
     
     const d = this.state.duration;
-    if (d > 0) $('time-pct').textContent = Math.round((Math.min(Math.max(0, this.state.cursor), d) / d) * 100) + '%';
+    if (d > 0) $('time-pct').textContent = '(' + Math.round((Math.min(Math.max(0, this.state.cursor), d) / d) * 100) + '%)';
     else $('time-pct').textContent = '';
   },
 
@@ -1937,9 +1959,12 @@ frameDeleted(t) {
 
   
   nextBlock() {
-    const runs = this.model.keptRuns();
+    const cuts = this.model.cuts;
+    const deleted = this.model.deleted;
     const t = this.state.cursor;
-    for (const [s] of runs) {
+    for (let i = 0; i < deleted.length; i++) {
+      if (deleted[i]) continue;
+      const s = cuts[i];
       if (s > t + 1e-6) { this.seekTo(s); return; }
     }
     this.setStatus('No next block');
@@ -1947,10 +1972,13 @@ frameDeleted(t) {
 
   
   prevBlock() {
-    const runs = this.model.keptRuns();
+    const cuts = this.model.cuts;
+    const deleted = this.model.deleted;
     const t = this.state.cursor;
     let best = null;
-    for (const [s] of runs) {
+    for (let i = 0; i < deleted.length; i++) {
+      if (deleted[i]) continue;
+      const s = cuts[i];
       if (s < t - 1e-6) best = s; else break;
     }
     if (best != null) this.seekTo(best);

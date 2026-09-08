@@ -16,17 +16,17 @@
         <div id="video-placeholder">
           <div class="placeholder-icon">&#9654;</div>
           <div class="placeholder-text">Open a video to start editing</div>
-          <button id="btn-open2" class="toolbar-btn primary">Open File</button>
+          <button id="btn-open2" class="toolbar-btn primary" title="Open file (Ctrl+O)">Open File</button>
         </div>
       </div>
       <div id="player-controls">
-        <div id="time-display"><span id="time-current">00:00:00.000</span><span class="sep">/</span><span id="time-total">00:00:00.000</span><span class="sep">/</span><span id="time-pct"></span></div>
+        <div id="time-display"><span id="time-current">00:00:00.000</span><span class="sep">/</span><span id="time-total">00:00:00.000</span><span id="time-pct"></span></div>
         <div class="spacer"></div>
         <div class="transport">
-          <button id="btn-start" class="ctrl-btn" title="To start of project">
+          <button id="btn-start" class="ctrl-btn" title="To start of project ([)">
             <svg viewBox="0 0 24 24" width="18" height="18"><line x1="4" y1="6" x2="4" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18 6 L12 12 L18 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 6 L7 12 L13 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-prevblock" class="ctrl-btn" title="Previous block">
+          <button id="btn-prevblock" class="ctrl-btn" title="Previous block (Shift+S)">
             <svg viewBox="0 0 24 24" width="18" height="18"><path d="M16 6 L10 12 L16 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 6 L5 12 L11 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <button id="btn-prevkf" class="ctrl-btn" title="Previous keyframe (S / &larr;)">
@@ -38,10 +38,10 @@
           <button id="btn-nextkf" class="ctrl-btn" title="Next keyframe (F / &rarr;)">
             <svg viewBox="0 0 24 24" width="18" height="18"><path d="M9.5 6 L15.5 12 L9.5 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-nextblock" class="ctrl-btn" title="Next block">
+          <button id="btn-nextblock" class="ctrl-btn" title="Next block (Shift+F)">
             <svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 6 L14 12 L8 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 6 L19 12 L13 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-end" class="ctrl-btn" title="To end of project">
+          <button id="btn-end" class="ctrl-btn" title="To end of project (])">
             <svg viewBox="0 0 24 24" width="18" height="18"><line x1="20" y1="6" x2="20" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M6 6 L12 12 L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 6 L17 12 L11 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
@@ -85,6 +85,9 @@
       <span class="hint"><kbd>V</kbd> Merge</span>
       <span class="hint"><kbd>S</kbd><kbd>F</kbd> Frame</span>
       <span class="hint"><kbd>Ctrl+E</kbd> Export</span>
+      <button id="btn-help" class="help-btn" title="Keyboard shortcuts">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </button>
     </div>
   </footer>
 
@@ -93,6 +96,28 @@
       <div id="export-modal-title">Export</div>
       <div id="export-modal-bar"><div id="export-modal-fill"></div></div>
       <div id="export-modal-status">Preparing…</div>
+    </div>
+  </div>
+
+  <div id="help-modal" class="hidden">
+    <div id="help-modal-card">
+      <div id="help-modal-title">Keyboard Shortcuts</div>
+      <div id="help-modal-body">
+        <div class="shortcut-row"><span class="desc">Play / Pause</span><span class="keys"><kbd>Space</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Previous / Next keyframe</span><span class="keys"><kbd>S</kbd> / <kbd>F</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Previous / Next block</span><span class="keys"><kbd>Shift</kbd>+<kbd>S</kbd> / <kbd>Shift</kbd>+<kbd>F</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Start / End of project</span><span class="keys"><kbd>[</kbd> / <kbd>]</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Cut at caret</span><span class="keys"><kbd>C</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Delete segment</span><span class="keys"><kbd>X</kbd> / <kbd>Delete</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Restore segment</span><span class="keys"><kbd>R</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Merge segments</span><span class="keys"><kbd>V</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Multi-select segments</span><span class="keys"><kbd>Alt</kbd>+Click</span></div>
+        <div class="shortcut-row"><span class="desc">Undo / Redo</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Open file</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>O</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Save project</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>S</kbd></span></div>
+        <div class="shortcut-row"><span class="desc">Export</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>E</kbd></span></div>
+      </div>
+      <button id="help-modal-close">Close</button>
     </div>
   </div>
 

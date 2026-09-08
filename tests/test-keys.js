@@ -491,6 +491,17 @@ app.whenReady().then(async () => {
   const cutsRedo = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   check('redo re-applies the whole drag', near(cutsRedo[2], postDragCut));
 
+  
+  console.log('[28] adjacent kept blocks are separate stops');
+  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys();`);
+  await js(`window.__app.timeline.selectedIndex = null; window.__app.seekTo(${k1}); window.__app.cut();`);
+  await js(`window.__app.seekTo(0); window.__app.nextBlock();`);
+  const nbAdj = await js(`window.__app.state.cursor`);
+  check('next block stops at kept|kept cut', near(nbAdj, k1));
+  await js(`window.__app.prevBlock();`);
+  const pbAdj = await js(`window.__app.state.cursor`);
+  check('prev block returns to start', near(pbAdj, 0));
+
   win.destroy();
   console.log('\nRESULT:', pass, 'passed,', fail, 'failed');
   app.exit(fail ? 1 : 0);

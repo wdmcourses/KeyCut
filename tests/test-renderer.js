@@ -148,6 +148,26 @@ app.whenReady().then(async () => {
   const osOpen = await js(`({src: !!window.__app.state.source, cuts: window.__app.model.cuts.length})`);
   check('project loaded from OS-open', osOpen.src === true && osOpen.cuts === 5);
 
+  
+  console.log('[7] help modal toggles');
+  const help = await js(`(() => {
+    const m = document.querySelector('#help-modal');
+    window.__app.toggleHelp();
+    const shown = !m.classList.contains('hidden');
+    window.__app.toggleHelp();
+    const hidden = m.classList.contains('hidden');
+    return {
+      shown,
+      hidden,
+      rows: document.querySelectorAll('#help-modal-body .shortcut-row').length,
+      helpBtn: !!document.querySelector('#btn-help')
+    };
+  })()`);
+  check('help button present', help.helpBtn);
+  check('help modal opens', help.shown);
+  check('help modal closes', help.hidden);
+  check('help lists shortcuts', help.rows >= 10);
+
   win.destroy();
   console.log('\nRESULT:', pass, 'passed,', fail, 'failed');
   console.log('CONSOLE ERRORS:', errors.length ? errors.join('\n') : '(none)');

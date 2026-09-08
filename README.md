@@ -33,6 +33,8 @@ output keeps the original quality and the whole operation is fast.</p>
 | --- | --- |
 | Space | Play / pause |
 | S / F | Previous / next keyframe |
+| Shift+S / Shift+F | Previous / next block |
+| [ / ] | To start / end of project |
 | C | Cut at the caret |
 | X / R | Delete / restore segment |
 | V | Merge segments |
@@ -40,6 +42,12 @@ output keeps the original quality and the whole operation is fast.</p>
 | Ctrl+Z / Ctrl+Shift+Z | Undo / Redo |
 | Ctrl+O / Ctrl+S | Open / save project |
 | Ctrl+E | Export |
+
+## Recording with OBS
+
+KeyCut cuts only at keyframes, so the more keyframes a file has, the closer a cut can land to the exact frame you want.
+
+In OBS, record with frequent keyframes: add `keyint=6` to the x264/x265 encoder options (or set a low keyframe interval) so a keyframe is written every 6 frames — about every 0.2 s at 30 fps or 0.1 s at 60 fps. This lets you cut with frame-level precision. The trade-off is a slightly larger recording, since every keyframe is an independently decodable frame.
 
 ## Download
 
