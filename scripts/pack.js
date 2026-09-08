@@ -183,8 +183,18 @@ async function main() {
           if (!fs.existsSync(rcedit)) {
             await download('https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe', rcedit);
           }
-          execFileSync(rcedit, [path.join(DIST, cfg.newBin), '--set-icon', iconIco], { stdio: 'ignore' });
-          console.log('App icon embedded into', cfg.newBin);
+          const pkg = require(path.join(ROOT, 'package.json'));
+          execFileSync(rcedit, [
+            path.join(DIST, cfg.newBin),
+            '--set-icon', iconIco,
+            '--set-version-string', 'FileDescription', 'KeyCut',
+            '--set-version-string', 'ProductName', 'KeyCut',
+            '--set-version-string', 'CompanyName', 'KeyCut',
+            '--set-version-string', 'OriginalFilename', 'KeyCut.exe',
+            '--set-product-version', pkg.version,
+            '--set-file-version', pkg.version + '.0'
+          ], { stdio: 'ignore' });
+          console.log('App icon and version info embedded into', cfg.newBin);
         } catch (err) {
           console.warn('Could not embed the icon (non-fatal):', err.message);
         }
@@ -196,10 +206,10 @@ async function main() {
   const label = path.basename(DIST);
   const cwd = path.join(ROOT, 'dist');
   if (platform === 'win32') {
-    const sz = find7z();
-    if (!sz) throw new Error('7-Zip not found (needed for compressed zip)');
-    fs.rmSync(path.join(cwd, label + '.zip'), { force: true });
-    execFileSync(sz, ['a', '-tzip', '-mx=9', '-bso0', '-bsp0', label + '.zip', label], { cwd, stdio: 'inherit' });
+    const zipPath = path.join(cwd, label + '.zip');
+    const dirPath = path.join(cwd, label);
+    fs.rmSync(zipPath, { force: true });
+    execFileSync('powershell', ['-NoProfile', '-Command', 'Compress-Archive -Path "' + dirPath + '" -DestinationPath "' + zipPath + '" -CompressionLevel Optimal'], { stdio: 'inherit' });
   } else {
     fs.rmSync(path.join(cwd, label + '.tar.gz'), { force: true });
     execFileSync('tar', ['-czf', label + '.tar.gz', label], { cwd, stdio: 'inherit' });
