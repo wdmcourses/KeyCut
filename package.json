@@ -1,0 +1,23 @@
+{
+  "name": "keycut",
+  "productName": "KeyCut",
+  "version": "0.1.0",
+  "description": "Fast lossless video editor - cut and export without re-encoding",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "ffmpeg": "node scripts/get-ffmpeg.js",
+    "pack": "node scripts/pack.js",
+    "test": "electron tests/test-renderer.js",
+    "test:keys": "electron tests/test-keys.js",
+    "test:scroll": "electron tests/test-scroll.js"
+  },
+  "author": "KeyCut",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.4.11"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}
