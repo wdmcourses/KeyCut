@@ -34,6 +34,7 @@ def add_dir(zf, base, root):
         else:
             info = zipfile.ZipInfo(rel)
             info.create_system = 3
+            info.compress_type = zipfile.ZIP_DEFLATED
             mode = 0o755 if is_exec(p) else 0o644
             info.external_attr = (stat.S_IFREG | mode) << 16
             with zf.open(info, 'w') as out:
