@@ -12,7 +12,7 @@ const APP_FILES = ['main.js', 'preload.js', 'package.json', 'lib', 'renderer', '
 const PLATFORMS = {
   win32:  { ffmpegBin: 'ffmpeg.exe', archive: 'zip', bin: 'electron.exe', newBin: 'KeyCut.exe' },
   linux:  { ffmpegBin: 'ffmpeg',     archive: 'tar.gz', bin: 'electron',   newBin: 'KeyCut' },
-  darwin: { ffmpegBin: 'ffmpeg',     archive: 'zip' }
+  darwin: { ffmpegBin: 'ffmpeg',     archive: 'tar.gz' }
 };
 
 function target() {
@@ -59,24 +59,26 @@ async function download(url, outFile) {
 
 
 
+function find7z() {
+  const sevens = [
+    'C:/Program Files/7-Zip/7z.exe',
+    'C:/Program Files (x86)/7-Zip/7z.exe',
+    process.env.ProgramFiles + '/7-Zip/7z.exe'
+  ];
+  for (const sz of sevens) if (sz && fs.existsSync(sz)) return sz;
+  return null;
+}
+
 function extractZip(zip, out, platform) {
   if (platform === 'darwin') {
-    const sevens = [
-      'C:/Program Files/7-Zip/7z.exe',
-      'C:/Program Files (x86)/7-Zip/7z.exe',
-      process.env.ProgramFiles + '/7-Zip/7z.exe'
-    ];
-    for (const sz of sevens) {
-      if (sz && require('fs').existsSync(sz)) {
+    const sz = find7z();
+    if (sz) {
+      try {
+        execFileSync(sz, ['x', '-y', '-o' + out, zip], { cwd: ROOT, stdio: 'ignore' });
+      } catch {
         
-        
-        try {
-          execFileSync(sz, ['x', '-y', '-o' + out, zip], { cwd: ROOT, stdio: 'ignore' });
-        } catch {
-          
-        }
-        return;
       }
+      return;
     }
   }
   
@@ -193,9 +195,13 @@ async function main() {
   
   const label = path.basename(DIST);
   const cwd = path.join(ROOT, 'dist');
-  if (cfg.archive === 'zip') {
-    execFileSync('tar', ['-a', '-c', '-f', label + '.zip', label], { cwd, stdio: 'inherit' });
+  if (platform === 'win32') {
+    const sz = find7z();
+    if (!sz) throw new Error('7-Zip not found (needed for compressed zip)');
+    fs.rmSync(path.join(cwd, label + '.zip'), { force: true });
+    execFileSync(sz, ['a', '-tzip', '-mx=9', '-bso0', '-bsp0', label + '.zip', label], { cwd, stdio: 'inherit' });
   } else {
+    fs.rmSync(path.join(cwd, label + '.tar.gz'), { force: true });
     execFileSync('tar', ['-czf', label + '.tar.gz', label], { cwd, stdio: 'inherit' });
   }
 

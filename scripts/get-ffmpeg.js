@@ -16,7 +16,7 @@ const TMP_EXTRACT = path.join(ROOT, 'vendor', '.ffmpeg-extract');
 
 const PLATFORMS = {
   win32: {
-    url: 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
+    assetPart: 'win64-gpl.zip',
     bin: 'ffmpeg.exe', kind: 'zip'
   },
   linux: {
@@ -50,6 +50,15 @@ async function download(url, outFile) {
   process.stdout.write('Downloaded ' + (buf.length / 1048576).toFixed(1) + ' MB\n');
 }
 
+async function btbUrl(assetPart) {
+  const res = await fetch('https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest');
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' for BtbN release');
+  const data = await res.json();
+  const asset = data.assets.find((a) => a.name.includes(assetPart));
+  if (!asset) throw new Error('ffmpeg asset not found: ' + assetPart);
+  return asset.browser_download_url;
+}
+
 async function main() {
   const platform = targetPlatform();
   const cfg = PLATFORMS[platform];
@@ -62,7 +71,8 @@ async function main() {
 
   fs.mkdirSync(outDir, { recursive: true });
   try {
-    await download(cfg.url, TMP_ZIP);
+    const url = cfg.assetPart ? await btbUrl(cfg.assetPart) : cfg.url;
+    await download(url, TMP_ZIP);
 
     fs.rmSync(TMP_EXTRACT, { recursive: true, force: true });
     fs.mkdirSync(TMP_EXTRACT, { recursive: true });
