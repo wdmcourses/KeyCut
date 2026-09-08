@@ -17,7 +17,7 @@ FFmpeg stream copy, so the output keeps the original quality and the whole
 operation is fast.
 
 <p align="center">
-  <img src="keycut.png" width="85%" alt="KeyCut screenshot" />
+  <img src="keycut.png" width="62%" alt="KeyCut screenshot" />
 </p>
 
 ## Features
