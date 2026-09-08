@@ -12,7 +12,7 @@ const APP_FILES = ['main.js', 'preload.js', 'package.json', 'lib', 'renderer', '
 const PLATFORMS = {
   win32:  { ffmpegBin: 'ffmpeg.exe', archive: 'zip', bin: 'electron.exe', newBin: 'KeyCut.exe' },
   linux:  { ffmpegBin: 'ffmpeg',     archive: 'tar.gz', bin: 'electron',   newBin: 'KeyCut' },
-  darwin: { ffmpegBin: 'ffmpeg',     archive: 'tar.gz' }
+  darwin: { ffmpegBin: 'ffmpeg',     archive: 'zip' }
 };
 
 function target() {
@@ -210,6 +210,11 @@ async function main() {
     const dirPath = path.join(cwd, label);
     fs.rmSync(zipPath, { force: true });
     execFileSync('powershell', ['-NoProfile', '-Command', 'Compress-Archive -Path "' + dirPath + '" -DestinationPath "' + zipPath + '" -CompressionLevel Optimal'], { stdio: 'inherit' });
+  } else if (platform === 'darwin') {
+    const zipPath = path.join(cwd, label + '.zip');
+    const dirPath = path.join(cwd, label);
+    fs.rmSync(zipPath, { force: true });
+    execFileSync('python', [path.join(ROOT, 'scripts', 'make-zip.py'), dirPath, zipPath], { stdio: 'inherit' });
   } else {
     fs.rmSync(path.join(cwd, label + '.tar.gz'), { force: true });
     execFileSync('tar', ['-czf', label + '.tar.gz', label], { cwd, stdio: 'inherit' });
