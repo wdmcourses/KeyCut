@@ -25,7 +25,7 @@ output keeps the original quality and the whole operation is fast.</p>
 - Split, delete, restore and merge segments directly on the timeline
 - Export the kept segments as a single file
 - Reads most container formats: MP4, MOV, MKV, WebM, AVI, TS/M2TS, FLV and more
-- Portable single-executable build with FFmpeg bundled
+- Portable, no installation required — FFmpeg is bundled
 
 ## Keyboard
 
