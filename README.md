@@ -12,9 +12,8 @@
 </p>
 
 KeyCut is a video editor that cuts and joins videos without re-encoding.
-It splits video at keyframes and splices the kept parts back together with
-FFmpeg stream copy, so the output keeps the original quality and the whole
-operation is fast.
+It splits video at keyframes and splices the kept parts back together, so the
+output keeps the original quality and the whole operation is fast.
 
 <p align="center">
   <img src="keycut.png" width="82%" alt="KeyCut screenshot" />
