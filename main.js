@@ -29,10 +29,11 @@ function lockSource(filePath) {
     try { lockProc.kill(); } catch {}
     lockProc = null;
   }
-  if (!filePath) return;
+  if (!filePath || process.platform !== 'win32') return;
   const p = filePath.replace(/'/g, "''");
   const script = "$share = [IO.FileShare]::Read; $share = $share -bor [IO.FileShare]::Write; try { $fs = New-Object IO.FileStream('" + p + "', [IO.FileMode]::Open, [IO.FileAccess]::Read, $share); while ($true) { Start-Sleep -Seconds 3600 } } catch {}";
   lockProc = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], { stdio: 'ignore', windowsHide: true });
+  lockProc.on('error', () => { lockProc = null; });
 }
 
 
