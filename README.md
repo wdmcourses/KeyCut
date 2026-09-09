@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">KeyCut</h1>
- 
+
 <p align="center"><b>Fast lossless video editor</b></p>
 
 <p align="center">
