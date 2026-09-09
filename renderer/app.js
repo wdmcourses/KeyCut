@@ -27,22 +27,24 @@ const COLORS = {
   bg: '#101216',
   noVideoBg: '#0d0f12',
   noVideoText: '#6b7280',
-  segKeptFrom: '#4aa8ff',
-  segKeptTo: '#2f8ef0',
+  segKeptFrom: '#3f86c4',
+  segKeptTo: '#2c6da8',
   segDeleted: '#22252b',
   segDeletedFrame: 'rgba(172,182,196,0.3)',
   segBoundary: 'rgba(255,255,255,0.55)',
   keyframeRgb: '255,209,102',
-  keyframeAlphaBright: 0.95,
-  keyframeAlphaDim: 0.5,
+  keyframeAlphaBright: 0.7,
+  keyframeAlphaDim: 0.32,
   
   
   keyframeGrayRgb: '94,102,112',
-  keyframeGrayAlphaBright: 0.95,
-  keyframeGrayAlphaDim: 0.5,
+  keyframeGrayAlphaBright: 0.4,
+  keyframeGrayAlphaDim: 0.14,
   selectionKept: '#ffffff',
   selectionGray: '#d8dee6',
   resizeHandle: 'rgba(255,255,255,0.95)',
+  activeSeg: 'rgba(255,255,255,0.95)',
+  activeSegGlow: 'rgba(255,255,255,0.5)',
   hatch: 'rgba(0,0,0,0.10)',
   rulerBg: '#15171b',
   rulerTick: '#4a5058',
@@ -63,6 +65,8 @@ class EditorModel {
     this.historyIndex = -1;
     this._runsCache = null;
     this.onMutate = null;
+    this.onCaptureState = null;
+    this.onRestoreState = null;
     this.suppressSnapshot = false;
     if (duration > 0) this.reset(duration);
   }
@@ -76,13 +80,27 @@ class EditorModel {
   
   snapshot() {
     this.history = this.history.slice(0, this.historyIndex + 1);
-    this.history.push({ cuts: this.cuts.slice(), deleted: this.deleted.slice() });
+    const sel = this.onCaptureState ? this.onCaptureState() : null;
+    if (this.historyIndex >= 0 && this.history[this.historyIndex] && sel) {
+      const p = this.history[this.historyIndex];
+      p.sel = p.sel || {};
+      p.sel.selected = sel.selected;
+      p.sel.selectedSet = sel.selectedSet;
+      p.sel.selectedAnchor = sel.selectedAnchor;
+    }
+    this.history.push({ cuts: this.cuts.slice(), deleted: this.deleted.slice(), sel });
     this._runsCache = null;
     const per = this.cuts.length * 12 + 8;
     const cap = Math.max(1, Math.min(100, Math.floor((64 * 1024 * 1024) / per)));
     if (this.history.length > cap) this.history.splice(0, this.history.length - cap);
     this.historyIndex = this.history.length - 1;
     if (this.onMutate) this.onMutate();
+  }
+
+  updateCurrentSelection(sel) {
+    if (this.historyIndex >= 0 && this.history[this.historyIndex]) {
+      this.history[this.historyIndex].sel = sel;
+    }
   }
 
   undo() {
@@ -103,6 +121,7 @@ class EditorModel {
     this.cuts = s.cuts.slice();
     this.deleted = s.deleted.slice();
     this._runsCache = null;
+    if (this.onRestoreState && s.sel) this.onRestoreState(s.sel);
     if (this.onMutate) this.onMutate();
   }
 
@@ -202,16 +221,35 @@ class EditorModel {
 
 
 
-moveBoundary(k, t) {
+moveBoundary(k, t, side) {
   if (k < 1 || k > this.cuts.length - 2) return 0;
   const keptBefore = !this.deleted[k - 1];
   const keptAfter = !this.deleted[k];
-  if (keptBefore === keptAfter) return 0; 
+  if (!keptBefore && !keptAfter) return 0; 
   const lo = this.cuts[k - 1];
   const hi = this.cuts[k + 1];
   t = Math.min(Math.max(t, lo), hi);
   if (Math.abs(t - this.cuts[k]) < 1e-9) return 0;
   if (!this.suppressSnapshot) this.snapshot();
+  if (keptBefore && keptAfter) {
+    const left = side === k - 1 || side === 'left' || (side == null && t < this.cuts[k]);
+    if (left) {
+      t = Math.min(t, this.cuts[k]);
+      if (t <= lo + 1e-9 || Math.abs(t - this.cuts[k]) < 1e-9) return 0;
+      this.cuts.splice(k, 0, t);
+      this.deleted.splice(k, 0, true);
+      this._runsCache = null;
+      return 1;
+    }
+    t = Math.max(t, this.cuts[k]);
+    if (t >= hi - 1e-9 || Math.abs(t - this.cuts[k]) < 1e-9) return 0;
+    const dk = this.deleted[k];
+    this.cuts.splice(k + 1, 0, t);
+    this.deleted[k] = true;
+    this.deleted.splice(k + 1, 0, dk);
+    this._runsCache = null;
+    return 1;
+  }
   if (t - lo < 1e-9) {
     
     this.cuts.splice(k, 1);
@@ -257,8 +295,9 @@ moveBoundary(k, t) {
 
 
 
-const SEG = { y: 1, h: 50 };
-const RULER = { y: 53, h: 18 };
+const MARK = { y: 0, h: 14 };
+const SEG = { y: 16, h: 50 };
+const RULER = { y: 68, h: 18 };
 
 
 
@@ -313,6 +352,108 @@ const SCAN_INTERVAL_MS = 33;
 const SCAN_SEEK_MS = 0.03;         
 const EXPORT_CONCAT_PROGRESS = 0.97;
 
+function hslToHex(hh, sat, lit) {
+  const c = (1 - Math.abs(2 * lit - 1)) * sat;
+  const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+  const m = lit - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (hh < 60) { r = c; g = x; }
+  else if (hh < 120) { r = x; g = c; }
+  else if (hh < 180) { g = c; b = x; }
+  else if (hh < 240) { g = x; b = c; }
+  else if (hh < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return '#' + to(r) + to(g) + to(b);
+}
+
+function hexToHsl(hex) {
+  const hx = hex.replace('#', '');
+  const s = hx.length === 3 ? hx.split('').map((c) => c + c).join('') : hx;
+  const n = parseInt(s, 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h *= 60;
+  if (h < 0) h += 360;
+  return [h, sat, l];
+}
+
+function pickMarkerColor(existing) {
+  const used = (existing || []).map((c) => hexToHsl(c)).filter((c) => c != null);
+  const candidates = [];
+  for (let h = 30; h < 345; h += 4) {
+    const sat = 0.22 + ((h % 7) / 7) * 0.10;
+    const lit = 0.42 + ((h % 5) / 5) * 0.08;
+    let minD = Infinity;
+    for (const u of used) {
+      const dh = Math.min(Math.abs(h - u[0]), 360 - Math.abs(h - u[0])) / 180;
+      const ds = Math.abs(sat - u[1]);
+      const dl = Math.abs(lit - u[2]);
+      const d = Math.sqrt(dh * dh * 1.4 + ds * ds + dl * dl * 1.4);
+      if (d < minD) minD = d;
+    }
+    candidates.push({ h, sat, lit, d: minD });
+  }
+  let maxD = 0;
+  for (const c of candidates) if (c.d > maxD) maxD = c.d;
+  let pool = candidates;
+  if (used.length) pool = candidates.filter((c) => c.d >= maxD * 0.86);
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  return hslToHex(pick.h, pick.sat, pick.lit);
+}
+
+function hexToRgba(hex, a) {
+  const h = hex.replace('#', '');
+  const s = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(s, 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+}
+
+function lightenHex(hex, f) {
+  const h = hex.replace('#', '');
+  const s = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(s, 16);
+  const r = Math.min(255, Math.round(((n >> 16) & 255) * f));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * f));
+  const b = Math.min(255, Math.round((n & 255) * f));
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function clipRuns(runs, start, end) {
+  const out = [];
+  for (const [s, e] of runs) {
+    const a = Math.max(s, start);
+    const b = Math.min(e, end);
+    if (b > a) out.push([a, b]);
+  }
+  return out;
+}
+
+function subtractRuns(runs, start, end) {
+  const out = [];
+  for (const [s, e] of runs) {
+    if (e <= start || s >= end) { out.push([s, e]); continue; }
+    if (s < start) out.push([s, start]);
+    if (e > end) out.push([end, e]);
+  }
+  return out;
+}
+
+function safeFileName(name) {
+  const s = String(name).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim();
+  return s || 'part';
+}
+
 function arraysEqual(a, b) {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
@@ -348,6 +489,14 @@ function snapKey(t, keys) {
   const prev = idx > 0 ? keys[idx - 1] : keys[0];
   const next = keys[idx];
   return (next - t <= t - prev) ? next : prev;
+}
+
+function prevKey(t, keys) {
+  if (!keys || !keys.length) return t;
+  const idx = binaryFirst(keys, t);
+  if (idx >= keys.length) return keys[keys.length - 1];
+  if (idx === 0) return keys[0];
+  return keys[idx - 1];
 }
 
 
@@ -393,6 +542,18 @@ class Timeline {
     this.selectedAnchor = null; 
     this.selectedSet = null; 
     this.needsRender = true;
+    this.ctrlHeld = false;
+    this.hoverX = null;
+    this.activeBlock = null;
+    this.markers = [];
+    this._markerSeq = 0;
+    this.onMarkersChange = null;
+    this.onMarkerEdit = null;
+    this.onMarkerDragStart = null;
+    this.onMarkerBubbleHide = null;
+    this.onMarkerMove = null;
+    this.onViewChanged = null;
+    this._lastBubbleId = null;
     this.onZoom = null;
     this.onResize = null; 
 
@@ -411,6 +572,13 @@ class Timeline {
     this.canvas.addEventListener('mousedown', (e) => this.onDown(e));
     this.canvas.addEventListener('mousemove', (e) => this.onMove(e));
     window.addEventListener('mouseup', (e) => this.onUp(e));
+    this.canvas.addEventListener('mouseleave', () => {
+      if (this.hoverX != null) {
+        this.hoverX = null;
+        this.needsRender = true;
+        this.tick();
+      }
+    });
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
 
     this.resize();
@@ -426,7 +594,10 @@ class Timeline {
     this.canvas.height = Math.round(h * this.dpr);
     this.w = w;
     this.h = h;
-    this.updateScrollbar();
+    if (this.duration > 0 && this.pxPerSec < this.minZoom()) {
+      this.pxPerSec = this.minZoom();
+    }
+    this.clampView();
   }
 
   setData({ duration, keyTimes, model, cursor }) {
@@ -436,6 +607,8 @@ class Timeline {
     this.selected = null; 
     this.selectedAnchor = null; 
     this.selectedSet = null; 
+    this.activeBlock = null; 
+    this.markers = [];
     if (cursor !== undefined) this.cursor = cursor;
     this.cornerState = new Map();
     this.fit();
@@ -464,7 +637,7 @@ class Timeline {
   fit() {
     if (this.duration <= 0) return;
     this.viewStart = 0;
-    this.pxPerSec = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.w / this.duration));
+    this.pxPerSec = Math.min(ZOOM_MAX, this.w / this.duration);
     this.clampView();
     if (this.onZoom) this.onZoom(this.pxPerSec);
   }
@@ -474,6 +647,7 @@ class Timeline {
     const maxStart = Math.max(0, this.duration - viewW);
     this.viewStart = Math.min(Math.max(0, this.viewStart), maxStart);
     this.updateScrollbar();
+    if (this.onViewChanged) this.onViewChanged();
   }
 
   
@@ -574,6 +748,10 @@ class Timeline {
     });
   }
 
+  minZoom() {
+    return this.duration > 0 ? this.w / this.duration : ZOOM_MIN;
+  }
+
   minViewW() {
     return this.w / ZOOM_MAX;
   }
@@ -582,7 +760,7 @@ class Timeline {
     const end = Math.min(this.viewEnd(), this.duration);
     const leftT = Math.min(this.barTime(x, barW), end - this.minViewW());
     const viewW = Math.max(this.minViewW(), end - leftT);
-    this.pxPerSec = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.w / viewW));
+    this.pxPerSec = Math.max(this.minZoom(), Math.min(ZOOM_MAX, this.w / viewW));
     this.viewStart = end - viewW;
     this.clampView();
     if (this.onZoom) this.onZoom(this.pxPerSec);
@@ -591,7 +769,7 @@ class Timeline {
   dragRightEdge(x, barW) {
     const rightT = Math.max(this.barTime(x, barW), this.viewStart + this.minViewW());
     const viewW = Math.max(this.minViewW(), rightT - this.viewStart);
-    this.pxPerSec = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.w / viewW));
+    this.pxPerSec = Math.max(this.minZoom(), Math.min(ZOOM_MAX, this.w / viewW));
     this.clampView();
     if (this.onZoom) this.onZoom(this.pxPerSec);
   }
@@ -609,7 +787,7 @@ class Timeline {
 
   
   setZoom(pps) {
-    const pps2 = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, pps));
+    const pps2 = Math.max(this.minZoom(), Math.min(ZOOM_MAX, pps));
     if (this.duration <= 0) { this.pxPerSec = pps2; return; }
     const center = this.viewStart + this.w / (2 * this.pxPerSec);
     this.pxPerSec = pps2;
@@ -625,7 +803,7 @@ class Timeline {
   zoomAt(mx, factor) {
     const oldPPS = this.pxPerSec;
     const t = this.xToTime(mx);
-    this.pxPerSec = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, oldPPS * factor));
+    this.pxPerSec = Math.max(this.minZoom(), Math.min(ZOOM_MAX, oldPPS * factor));
     this.viewStart = t - mx / this.pxPerSec;
     this.clampView();
     if (this.onZoom) this.onZoom(this.pxPerSec);
@@ -683,6 +861,7 @@ class Timeline {
   
 
   regionAt(y) {
+    if (y >= MARK.y && y < MARK.y + MARK.h) return 'mark';
     if (y >= SEG.y && y < SEG.y + SEG.h) return 'seg';
     if (y >= RULER.y && y < RULER.y + RULER.h) return 'ruler';
     return null;
@@ -696,58 +875,45 @@ class Timeline {
     this.tick();
   }
 
-  selectSegment(i, shift = false) {
-    if (!this.model) {
-      this.selected = null;
-      this.selectedAnchor = null;
-      this.selectedSet = null;
-      this.needsRender = true;
-      this.tick();
-      return;
-    }
-    this.selectedSet = null; 
-    if (shift && this.selectedAnchor != null) {
-      
-      
-      const a = this.selectedAnchor;
-      const st = this.model.deleted[a];
-      const same = (idx) => idx >= 0 && idx < this.model.deleted.length && this.model.deleted[idx] === st;
-      let lo = a;
-      while (lo > 0 && same(lo - 1)) lo--;
-      let hi = a;
-      while (hi < this.model.deleted.length - 1 && same(hi + 1)) hi++;
-      const jc = Math.max(lo, Math.min(hi, i));
-      this.selected = [Math.min(a, jc), Math.max(a, jc)];
-    } else {
-      this.selected = [i, i];
-      this.selectedAnchor = i;
-    }
-    this.needsRender = true;
-    this.tick();
-  }
-
-  
-  
-  
-  
-  toggleSelectSegment(i) {
+toggleSelectSegment(i) {
     if (!this.model || i < 0 || i >= this.model.deleted.length) return;
     if (!this.selectedSet) {
-      this.selectedSet = new Set(this.selectionIndices());
-      this.selected = null;
+      const anchor = this.activeIndex();
+      this.selectedSet = new Set([anchor]);
+      this.selectedAnchor = anchor;
+    }
+    if (i === this.selectedAnchor) {
       this.selectedSet.add(i);
     } else if (this.selectedSet.has(i)) {
       this.selectedSet.delete(i);
     } else {
       this.selectedSet.add(i);
     }
-    this.selectedAnchor = i;
+    this.selectedSet.add(this.selectedAnchor);
     if (this.selectedSet.size === 0) this.selectedSet = null;
+    this.selected = null;
     this.needsRender = true;
     this.tick();
   }
 
-  
+  extendSelectRange(i) {
+    if (!this.model || i < 0 || i >= this.model.deleted.length) return;
+    const anchor = this.activeIndex();
+    this.selected = [Math.min(anchor, i), Math.max(anchor, i)];
+    this.selectedSet = null;
+    this.selectedAnchor = anchor;
+    this.needsRender = true;
+    this.tick();
+  }
+
+  clearSelection() {
+    this.selected = null;
+    this.selectedAnchor = null;
+    this.selectedSet = null;
+    this.needsRender = true;
+    this.tick();
+  }
+
   selectionIndices() {
     if (this.selectedSet && this.selectedSet.size) return [...this.selectedSet];
     if (this.selected) {
@@ -759,22 +925,167 @@ class Timeline {
     return [];
   }
 
+  activeIndex() {
+    if (this.model && this.activeBlock != null && this.activeBlock >= 0 && this.activeBlock < this.model.deleted.length) {
+      return this.activeBlock;
+    }
+    return this.model ? this.model.segmentOf(this.cursor) : 0;
+  }
+
+  markerAt(x) {
+    if (!this.markers || !this.markers.length) return null;
+    for (const m of this.markers) {
+      const mx = this.timeToX(m.t);
+      if (Math.abs(mx - x) <= 8) return m;
+    }
+    return null;
+  }
+
+  markerTimeAt(x) {
+    return snapKey(this.xToTime(x), this.keyTimes);
+  }
+
+  moveMarkerTo(id, t) {
+    const m = this.markers.find((x) => x.id === id);
+    if (!m) return;
+    m.t = this.clampMarkerTime(id, t);
+    this.needsRender = true;
+    this.tick();
+    if (this.onMarkerDragStart) this.onMarkerDragStart();
+    if (this.onMarkerMove) this.onMarkerMove(m.t);
+    if (this.onMarkersChange) this.onMarkersChange();
+  }
+
+  addMarkerAt(t) {
+    if (!this.model) return null;
+    const mk = { id: ++this._markerSeq, t: snapKey(t, this.keyTimes), name: 'part_' + (this.markers.length + 1), color: pickMarkerColor(this.markers.map((m) => m.color)) };
+    mk.t = this.clampMarkerTime(mk.id, mk.t);
+    const existing = this.markers.find((m) => Math.abs(m.t - mk.t) < 1e-6);
+    if (existing) {
+      this._lastBubbleId = null;
+      return existing;
+    }
+    this.markers.push(mk);
+    this.needsRender = true;
+    this.tick();
+    this.model.snapshot();
+    this._lastBubbleId = mk.id;
+    if (this.onMarkerEdit) this.onMarkerEdit(mk);
+    if (this.onMarkersChange) this.onMarkersChange();
+    return mk;
+  }
+
+  nextKeyAfter(t) {
+    const keys = this.keyTimes || [];
+    const idx = binaryFirst(keys, t + 1e-9);
+    return idx < keys.length ? keys[idx] : t;
+  }
+
+  prevKeyBefore(t) {
+    const keys = this.keyTimes || [];
+    const idx = binaryFirst(keys, t);
+    let i = idx;
+    if (i < keys.length && Math.abs(keys[i] - t) < 1e-9) i--;
+    return i >= 0 ? keys[i] : t;
+  }
+
+  clampMarkerTime(id, t) {
+    const keys = this.keyTimes || [];
+    if (!keys.length) return t;
+    let final = snapKey(t, keys);
+    const m = this.markers.find((x) => x.id === id);
+    const orig = m ? m.t : final;
+    const others = this.markers.filter((x) => x.id !== id).slice().sort((a, b) => a.t - b.t);
+    let left = null;
+    let right = null;
+    for (const o of others) {
+      if (o.t < orig) left = o;
+      else { right = o; break; }
+    }
+    if (left) {
+      const nx = this.nextKeyAfter(left.t);
+      if (final < nx) final = nx;
+    }
+    if (right) {
+      const pv = this.prevKeyBefore(right.t);
+      if (final > pv) final = pv;
+    }
+    return final;
+  }
+
   onDown(e) {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const region = this.regionAt(y);
     if (app.cancelStepPause) app.cancelStepPause();
+    const bubbleWasOpen = app && app._markerBubbleId;
+    if (this.onMarkerDragStart) this.onMarkerDragStart();
     
     
     const pan = e.button === 1 || region === null;
     
     
-    const rk = (!pan && region === 'seg' && !e.altKey) ? this.resizeBoundaryAt(x) : null;
+    if (region === 'mark') {
+      if (e.button === 1) {
+        const nm = this.markerAt(x);
+        if (nm) {
+          this.markers = this.markers.filter((m) => m.id !== nm.id);
+          this.needsRender = true;
+          this.tick();
+          this.model.snapshot();
+          this._lastBubbleId = null;
+          if (this.onMarkersChange) this.onMarkersChange();
+          if (this.onMarkerBubbleHide) this.onMarkerBubbleHide();
+          e.preventDefault();
+          return;
+        }
+        const mkT = this.clampMarkerTime(null, this.markerTimeAt(x));
+        const existing = this.markers.find((m) => Math.abs(m.t - mkT) < 1e-6);
+        if (existing) {
+          this.markers = this.markers.filter((m) => m.id !== existing.id);
+          this.needsRender = true;
+          this.tick();
+          this.model.snapshot();
+          this._lastBubbleId = null;
+          if (this.onMarkersChange) this.onMarkersChange();
+          if (this.onMarkerBubbleHide) this.onMarkerBubbleHide();
+          e.preventDefault();
+          return;
+        }
+        const mk = { id: ++this._markerSeq, t: mkT, name: 'part_' + (this.markers.length + 1), color: pickMarkerColor(this.markers.map((m) => m.color)) };
+        this.markers.push(mk);
+        this.needsRender = true;
+        this.tick();
+        this.model.snapshot();
+        this._lastBubbleId = mk.id;
+        if (this.onMarkerEdit) this.onMarkerEdit(mk);
+        if (this.onMarkersChange) this.onMarkersChange();
+        e.preventDefault();
+        return;
+      }
+      if (app.video && !app.video.paused) app.pause();
+      const near = this.markerAt(x);
+      if (near) {
+        this.drag = { mode: 'marker', id: near.id, lastX: x, x, y, region };
+        this._markerToggleOff = bubbleWasOpen === near.id;
+        if (this.onMarkerDragStart) this.onMarkerDragStart();
+        e.preventDefault();
+        return;
+      }
+      this.drag = { mode: 'scrub', lastX: x, moved: false, x, y, region };
+      this.setCursor(snapKey(this.xToTime(x), this.activeKeys || this.keyTimes));
+      if (this.onScrub) this.onScrub(this.cursor);
+      e.preventDefault();
+      return;
+    }
+    
+    
+    const rk = (!pan && region === 'seg' && this.ctrlHeld && !e.altKey) ? this.resizeBoundaryAt(x) : null;
     if (rk != null) {
       
       if (app.video && !app.video.paused) app.pause();
-      this.drag = { mode: 'resize', k: rk, lastX: x, x, y, region };
+      this.drag = { mode: 'resize', k: rk, side: null, lastX: x, x, y, region };
       
       
       this.model.suppressSnapshot = true;
@@ -782,17 +1093,22 @@ class Timeline {
       e.preventDefault();
       return;
     }
-    this.drag = { mode: pan ? 'pan' : 'scrub', lastX: x, moved: false, x, y, region, shift: e.shiftKey };
+    this.drag = { mode: pan ? 'pan' : 'scrub', lastX: x, moved: false, x, y, region };
     if (pan) this.canvas.style.cursor = 'grabbing';
     if (!pan) {
       
       if (app.video && !app.video.paused) app.pause();
-      this.setCursor(this.xToTime(x));
-      if (this.onScrub) this.onScrub(this.cursor);
+      const rawT = this.xToTime(x);
+      let snapT = rawT;
       if (region === 'seg') {
-        if (e.altKey) this.toggleSelectSegment(this.model.segmentOf(this.xToTime(x)));
-        else this.selectSegment(this.model.segmentOf(this.xToTime(x)), e.shiftKey);
+        const block = this.model.segmentOf(rawT);
+        snapT = prevKey(rawT, this.activeKeys || this.keyTimes);
+        if (e.altKey) this.toggleSelectSegment(block);
+        else if (e.shiftKey) this.extendSelectRange(block);
+        else this.clearSelection();
       }
+      this.setCursor(snapT);
+      if (this.onScrub) this.onScrub(this.cursor);
     }
     e.preventDefault();
   }
@@ -800,10 +1116,16 @@ class Timeline {
   onMove(e) {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    this.hoverX = x;
     if (!this.drag) {
       
-      const rk = this.regionAt(e.clientY - rect.top) === 'seg' ? this.resizeBoundaryAt(x) : null;
-      this.canvas.style.cursor = rk != null ? 'ew-resize' : 'default';
+      const rk = (this.ctrlHeld && this.regionAt(e.clientY - rect.top) === 'seg') ? this.resizeBoundaryAt(x) : null;
+      let cur = 'default';
+      if (rk != null) cur = 'ew-resize';
+      else if (this.regionAt(e.clientY - rect.top) === 'mark' && this.markerAtX(x)) cur = 'pointer';
+      this.canvas.style.cursor = cur;
+      this.needsRender = true;
+      this.tick();
       return;
     }
     const dx = x - this.drag.lastX;
@@ -813,12 +1135,11 @@ class Timeline {
       this.clampView();
     } else if (this.drag.mode === 'resize') {
       this.resizeTo(this.drag.k, this.xToTime(x));
+    } else if (this.drag.mode === 'marker') {
+      this.moveMarkerTo(this.drag.id, this.xToTime(x));
     } else {
       this.setCursor(this.xToTime(x));
       if (this.onScrub) this.onScrub(this.cursor);
-      if (this.drag.shift && this.drag.region === 'seg') {
-        this.selectSegment(this.model.segmentOf(this.xToTime(x)), true);
-      }
     }
     this.drag.lastX = x;
     if (this.drag.mode === 'pan') this.canvas.style.cursor = 'grabbing';
@@ -827,11 +1148,39 @@ class Timeline {
     this.tick();
   }
 
+  markerAtX(x) {
+    if (!this.markers || !this.markers.length) return null;
+    for (const m of this.sortedMarkers()) {
+      if (Math.abs(this.timeToX(m.t) - x) <= 8) return m;
+    }
+    return null;
+  }
+
   onUp() {
     if (this.drag && this.drag.mode === 'scrub' && this.onScrubEnd) this.onScrubEnd();
+    const wasMarker = this.drag && this.drag.mode === 'marker';
+    const markerId = wasMarker ? this.drag.id : null;
+    const moved = this.drag ? this.drag.moved : false;
     this.endResizeDrag();
     this.drag = null;
     this.canvas.style.cursor = 'default';
+    if (wasMarker && markerId != null) {
+      if (moved) {
+        this._lastBubbleId = null;
+        if (this.model) this.model.snapshot();
+      } else {
+        const toggleOff = this._markerToggleOff;
+        this._markerToggleOff = false;
+        if (toggleOff) {
+          this._lastBubbleId = null;
+          if (this.onMarkerBubbleHide) this.onMarkerBubbleHide();
+        } else {
+          this._lastBubbleId = markerId;
+          const m = this.markers.find((x) => x.id === markerId);
+          if (m && this.onMarkerEdit) this.onMarkerEdit(m);
+        }
+      }
+    }
   }
 
   
@@ -849,11 +1198,19 @@ class Timeline {
     }
   }
 
+  setCtrlHeld(v) {
+    v = !!v;
+    if (this.ctrlHeld === v) return;
+    this.ctrlHeld = v;
+    this.needsRender = true;
+    this.tick();
+  }
+
   
   resizableBoundary(k) {
     if (!this.model || k < 1 || k > this.model.cuts.length - 2) return false;
     const b = this.model.deleted;
-    return b[k - 1] !== b[k];
+    return b[k - 1] !== b[k] || (!b[k - 1] && !b[k]);
   }
 
   
@@ -877,10 +1234,27 @@ class Timeline {
     const cuts = this.model.cuts;
     const lo = cuts[k - 1];
     const hi = cuts[k + 1];
-    const snapped = snapInRange(t, lo, hi, this.keyTimes);
+    const keptBefore = !this.model.deleted[k - 1];
+    const keptAfter = !this.model.deleted[k];
+    const junction = keptBefore && keptAfter;
+    let side = this.drag ? this.drag.side : null;
+    if (junction) {
+      if (side !== 'left' && side !== 'right' && Math.abs(t - cuts[k]) > 1e-6) {
+        side = t < cuts[k] ? 'left' : 'right';
+        if (this.drag) this.drag.side = side;
+      }
+    } else {
+      side = null;
+    }
+    const snapLo = junction && side === 'left' ? lo : (junction && side === 'right' ? cuts[k] : lo);
+    const snapHi = junction && side === 'left' ? cuts[k] : (junction && side === 'right' ? hi : hi);
+    const snapped = snapInRange(t, snapLo, snapHi, this.keyTimes);
     const before = this.captureCornerTargets();
-    const res = this.model.moveBoundary(k, snapped);
+    const res = this.model.moveBoundary(k, snapped, this.drag ? this.drag.side : null);
     if (res === 0) return;
+    if (res === 1 && junction && side === 'right' && this.drag) {
+      this.drag.k = k + 1;
+    }
     this.applyCornerChange(before);
     if (this.onResize) this.onResize();
     this.cursor = snapped;
@@ -954,13 +1328,84 @@ class Timeline {
 
     this.renderSegments(ctx, viewEnd);
     this.renderKeyframes(ctx, viewEnd);
+    this.renderMarkers(ctx);
     this.renderSelection(ctx);
+    this.renderActiveSegment(ctx, viewEnd);
     this.renderResizeHandles(ctx, viewEnd);
     this.renderRuler(ctx);
     
     ctx.fillStyle = COLORS.separator;
     ctx.fillRect(0, RULER.y - 1, w, 1);
     this.renderPlayhead(ctx);
+  }
+
+  renderMarkers(ctx) {
+    if (!this.markers || !this.markers.length) return;
+    const sorted = this.markers.slice().sort((a, b) => a.t - b.t);
+    let prev = 0;
+    for (const m of sorted) {
+      const xa = this.timeToX(prev);
+      const xb = this.timeToX(m.t);
+      if (xb > -12 && xa < this.w + 12) {
+        ctx.fillStyle = m.off ? 'rgba(229,72,77,0.35)' : 'rgba(63,185,80,0.22)';
+        ctx.fillRect(xa, MARK.y, Math.max(0, xb - xa), MARK.h);
+      }
+      prev = m.t;
+    }
+    for (const m of sorted) {
+      const x = this.timeToX(m.t);
+      if (x < -12 || x > this.w + 12) continue;
+      const img = this.glyphFor(m.color);
+      if (img && img.complete) {
+        ctx.save();
+        ctx.filter = 'brightness(1.35)';
+        ctx.drawImage(img, x - 7, MARK.y, 14, 14);
+        ctx.restore();
+      }
+      ctx.fillStyle = m.off ? 'rgba(170,180,190,0.85)' : 'rgba(255,255,255,0.9)';
+      ctx.fillRect(x - 0.5, MARK.y + MARK.h + 2, 1, SEG.h);
+    }
+  }
+
+  glyphFor(color) {
+    if (!this._glyphs) this._glyphs = {};
+    if (this._glyphs[color]) return this._glyphs[color];
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20"><path d="M16 4 v12 M12 4 h4 M12 16 h4" stroke="' + color + '" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M12 10 h-6 M6 10 l3.5 -2.5 M6 10 l3.5 2.5" stroke="' + color + '" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const img = new Image();
+    img.onload = () => {
+      if (this.needsRender != null) {
+        this.needsRender = true;
+        this.tick();
+      }
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(svg);
+    this._glyphs[color] = img;
+    return img;
+  }
+
+  markerAtTime(t) {
+    if (!this.markers || !this.markers.length) return null;
+    const sorted = this.sortedMarkers();
+    for (const m of sorted) {
+      if (t < m.t) return m;
+    }
+    return null;
+  }
+
+  markerColorAt(t) {
+    const m = this.markerAtTime(t);
+    return m ? m.color : null;
+  }
+
+  sortedMarkers() {
+    return this.markers.slice().sort((a, b) => a.t - b.t);
+  }
+
+  segGradient(from, to, y, h) {
+    const g = this.ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, from);
+    g.addColorStop(1, to);
+    return g;
   }
 
   renderSelection(ctx) {
@@ -970,46 +1415,70 @@ class Timeline {
     if (!idx.length) return;
     const top = SEG.y;
     const bottom = SEG.y + SEG.h;
-    
-    
-    
-    const stroke = this.model.deleted[idx[0]] ? COLORS.selectionGray : COLORS.selectionKept;
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
     for (const i of idx) {
       if (i < 0 || i >= cuts.length - 1) continue;
       const x0 = this.timeToX(cuts[i]);
       const x1 = this.timeToX(cuts[i + 1]);
       if (x1 < 0 || x0 > this.w) continue;
+      const gray = this.model.deleted[i];
+      ctx.save();
+      ctx.fillStyle = gray ? 'rgba(216,222,230,0.14)' : 'rgba(255,255,255,0.20)';
       ctx.beginPath();
       ctx.roundRect(x0, top, Math.max(0, x1 - x0), bottom - top, SEG_RADIUS);
+      ctx.fill();
+      ctx.strokeStyle = gray ? COLORS.selectionGray : COLORS.selectionKept;
+      ctx.lineWidth = 2;
       ctx.stroke();
+      ctx.restore();
     }
   }
 
   
   
   renderResizeHandles(ctx, viewEnd) {
-    if (!this.model) return;
+    if (!this.model || !this.ctrlHeld) return;
     const cuts = this.model.cuts;
-    
-    
-    if (binaryFirst(cuts, viewEnd) - Math.max(0, binaryFirst(cuts, this.viewStart) - 1) > 2000) return;
-    const first = Math.max(1, binaryFirst(cuts, this.viewStart) - 1);
-    const last = Math.min(cuts.length - 2, binaryFirst(cuts, viewEnd) + 1);
+    let k = null;
+    if (this.drag && this.drag.mode === 'resize') {
+      k = this.drag.k;
+    } else if (this.hoverX != null) {
+      k = this.resizeBoundaryAt(this.hoverX);
+    }
+    if (k == null || k < 1 || k > cuts.length - 2 || !this.resizableBoundary(k)) return;
+    const x = this.timeToX(cuts[k]);
+    if (x < -10 || x > this.w + 10) return;
     const cy = SEG.y + SEG.h / 2;
     ctx.fillStyle = COLORS.resizeHandle;
-    for (let k = first; k <= last; k++) {
-      if (!this.resizableBoundary(k)) continue;
-      const x = this.timeToX(cuts[k]);
-      if (x < -10 || x > this.w + 10) continue;
-      ctx.beginPath();
-      ctx.moveTo(x - 6, cy - 5); ctx.lineTo(x - 1, cy); ctx.lineTo(x - 6, cy + 5); ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(x + 6, cy - 5); ctx.lineTo(x + 1, cy); ctx.lineTo(x + 6, cy + 5); ctx.closePath();
-      ctx.fill();
-    }
+    ctx.beginPath();
+    ctx.moveTo(x - 4, cy - 3.2); ctx.lineTo(x - 0.6, cy); ctx.lineTo(x - 4, cy + 3.2); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + 4, cy - 3.2); ctx.lineTo(x + 0.6, cy); ctx.lineTo(x + 4, cy + 3.2); ctx.closePath();
+    ctx.fill();
+  }
+
+  renderActiveSegment(ctx, viewEnd) {
+    const cuts = this.model.cuts;
+    if (!cuts || cuts.length < 2) return;
+    if (this.selectionIndices().length) return;
+    const i = this.activeIndex();
+    if (i < 0 || i >= cuts.length - 1) return;
+    const x0 = this.timeToX(cuts[i]);
+    const x1 = this.timeToX(cuts[i + 1]);
+    if (x1 < 0 || x0 > this.w) return;
+    const top = SEG.y;
+    const bottom = SEG.y + SEG.h;
+    const rl = this.radiusAt(cuts[i]);
+    const rr = this.radiusAt(cuts[i + 1]);
+    ctx.save();
+    ctx.strokeStyle = COLORS.activeSeg;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = COLORS.activeSegGlow;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.roundRect(x0, top, x1 - x0, bottom - top, [rl, rr, rr, rl]);
+    ctx.stroke();
+    ctx.restore();
   }
 
   renderSegments(ctx, viewEnd) {
@@ -1052,11 +1521,27 @@ class Timeline {
         ctx.lineWidth = 1.5;
         ctx.stroke();
       } else {
-        const g = ctx.createLinearGradient(0, y, 0, y + h);
-        g.addColorStop(0, COLORS.segKeptFrom);
-        g.addColorStop(1, COLORS.segKeptTo);
-        ctx.fillStyle = g;
-        ctx.fill();
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(x0, y, x1 - x0, h, radii);
+        ctx.clip();
+        const pts = [t0];
+        const sm = this.sortedMarkers();
+        for (const m of sm) if (m.t > t0 + 1e-9 && m.t < t1 - 1e-9) pts.push(m.t);
+        pts.push(t1);
+        for (let b = 0; b < pts.length - 1; b++) {
+          const m = this.markerAtTime(pts[b]);
+          const reg = m ? m.color : null;
+          const xa = this.timeToX(pts[b]);
+          const xb = this.timeToX(pts[b + 1]);
+          ctx.fillStyle = reg
+            ? this.segGradient(lightenHex(reg, 1.2), reg, y, h)
+            : this.segGradient(COLORS.segKeptFrom, COLORS.segKeptTo, y, h);
+          if (m && m.off) ctx.globalAlpha = 0.25;
+          ctx.fillRect(xa, y, xb - xa, h);
+          if (m && m.off) ctx.globalAlpha = 1;
+        }
+        ctx.restore();
       }
     }
 
@@ -1126,6 +1611,14 @@ class Timeline {
     if (!keys || !keys.length || !this.model) return;
     const cuts = this.model.cuts;
     const pps = this.pxPerSec;
+    const offRanges = [];
+    {
+      let prev = 0;
+      for (const m of this.sortedMarkers()) {
+        if (m.off) offRanges.push([prev, m.t]);
+        prev = m.t;
+      }
+    }
     
     
     
@@ -1143,7 +1636,8 @@ class Timeline {
       let ci = binaryFirst(cuts, lo);
       const bright = ci < cuts.length && Math.round(this.timeToX(cuts[ci])) === col;
       const gray = this.model.deleted[this.model.segmentOf(t)];
-      if (gray) {
+      const inOff = !gray && offRanges.some(([a, b]) => t >= a - 1e-9 && t < b - 1e-9);
+      if (gray || inOff) {
         const a = bright ? COLORS.keyframeGrayAlphaBright : COLORS.keyframeGrayAlphaDim;
         ctx.fillStyle = 'rgba(' + COLORS.keyframeGrayRgb + ',' + a + ')';
       } else {
@@ -1205,9 +1699,9 @@ class Timeline {
     
     ctx.fillStyle = COLORS.playhead;
     ctx.beginPath();
-    ctx.moveTo(x - 7, 2);
-    ctx.lineTo(x + 7, 2);
-    ctx.lineTo(x, 12);
+    ctx.moveTo(x - 6, 2);
+    ctx.lineTo(x + 6, 2);
+    ctx.lineTo(x, 10);
     ctx.closePath();
     ctx.fill();
   }
@@ -1260,7 +1754,31 @@ const app = {
     this._mutedBeforeSkip = false;
     this.model = new EditorModel(0);
     this.state.model = this.model;
-    this.model.onMutate = () => this.markDirty();
+    this.model.onMutate = () => { this.markDirty(); this.syncExportButton(); };
+    this.model.onCaptureState = () => {
+      const t = this.timeline;
+      return {
+        selected: t.selected ? t.selected.slice() : null,
+        selectedSet: t.selectedSet ? [...t.selectedSet] : null,
+        selectedAnchor: t.selectedAnchor,
+        markers: t.markers.map((m) => ({ id: m.id, t: m.t, name: m.name, color: m.color, off: !!m.off }))
+      };
+    };
+    this.model.onRestoreState = (sel) => {
+      const t = this.timeline;
+      if (!t) return;
+      t.selected = sel.selected ? sel.selected.slice() : null;
+      t.selectedSet = sel.selectedSet ? new Set(sel.selectedSet) : null;
+      t.selectedAnchor = sel.selectedAnchor != null ? sel.selectedAnchor : null;
+      if (sel.markers) t.markers = sel.markers.map((m) => ({ id: m.id, t: m.t, name: m.name, color: m.color, off: !!m.off }));
+      if (this._markerBubbleId != null && !t.markers.some((x) => x.id === this._markerBubbleId)) {
+        this.hideMarkerBubble();
+      }
+      t._lastBubbleId = null;
+      t.needsRender = true;
+      t.tick();
+      this.updateStats();
+    };
     this.timeline = new Timeline($('timeline'), {
       scrollbar: $('timeline-scrollbar'),
       thumb: $('scrollbar-thumb')
@@ -1273,6 +1791,77 @@ const app = {
     this.timeline.onScrub = (t) => this.scrubBlip(t);
     this.timeline.onScrubEnd = () => this.scrubEnd();
     this.timeline.onResize = () => { this.refreshActiveKeys(); this.updateStats(); };
+    this.timeline.onMarkersChange = () => { this.syncExportButton(); this.updateStats(); };
+    this.timeline.onMarkerEdit = (m) => this.markerBubble(m);
+    this.timeline.onMarkerDragStart = () => this.hideMarkerBubble();
+    this.timeline.onMarkerBubbleHide = () => this.hideMarkerBubble();
+    this.timeline.onMarkerMove = (t) => {
+      this.scrubBlip(t);
+      this.state.cursor = t;
+      this.timeline.cursor = t;
+      this.timeline.needsRender = true;
+      this.timeline.tick();
+      this.seek(t);
+    };
+    this.timeline.onViewChanged = () => this.syncMarkerBubble();
+    $('marker-name').addEventListener('input', () => {
+      const inp = $('marker-name');
+      const clean = inp.value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '');
+      if (clean !== inp.value) inp.value = clean;
+      const id = this._markerBubbleId;
+      const m = this.timeline.markers.find((x) => x.id === id);
+      const dup = !!(m && this.timeline.markers.some((x) => x.id !== id && x.name === clean));
+      const srcName = this.state.source ? this.state.source.split(/[\\/]/).pop().toLowerCase() : '';
+      const srcCollide = !!(m && clean && (safeFileName(clean) + '.mp4').toLowerCase() === srcName);
+      const warn = $('marker-warn');
+      if (dup || srcCollide) {
+        inp.classList.add('dup');
+        warn.textContent = srcCollide ? 'Cannot use the original file name' : 'Name already used by another marker';
+        warn.classList.remove('hidden');
+      } else {
+        inp.classList.remove('dup');
+        warn.classList.add('hidden');
+        if (m) m.name = clean;
+      }
+    });
+    $('marker-name').addEventListener('keydown', (e) => {
+      if (e.code === 'Enter' || e.code === 'Escape') {
+        e.preventDefault();
+        this.hideMarkerBubble();
+      }
+    });
+    $('marker-name').addEventListener('blur', () => this.hideMarkerBubble());
+    $('marker-ok').addEventListener('mousedown', (e) => e.preventDefault());
+    $('marker-export').addEventListener('mousedown', (e) => e.preventDefault());
+    $('marker-off').addEventListener('mousedown', (e) => e.preventDefault());
+    $('marker-delete').addEventListener('mousedown', (e) => e.preventDefault());
+    $('marker-ok').addEventListener('click', () => this.hideMarkerBubble());
+    $('marker-export').addEventListener('click', () => {
+      const id = this._markerBubbleId;
+      this.hideMarkerBubble();
+      this.exportMarkerPart(id);
+    });
+    $('marker-off').addEventListener('click', () => {
+      const id = this._markerBubbleId;
+      const m = this.timeline.markers.find((x) => x.id === id);
+      if (!m) return;
+      m.off = !m.off;
+      const offBtn = $('marker-off');
+      offBtn.textContent = m.off ? 'On' : 'Off';
+      offBtn.title = m.off ? 'Enable this part for export' : 'Disable this part for export';
+      offBtn.classList.toggle('on', !!m.off);
+      this.timeline.needsRender = true;
+      this.timeline.tick();
+      this.model.snapshot();
+      this.syncExportButton();
+    });
+    $('marker-delete').addEventListener('click', () => {
+      const id = this._markerBubbleId;
+      this.hideMarkerBubble();
+      this.deleteActiveMarker(id);
+    });
+    this.hideMarkerBubble();
+    this.syncExportButton();
 
     this.bindDragDrop();
 
@@ -1322,9 +1911,10 @@ const app = {
     $('btn-open2').addEventListener('click', () => this.openFile());
     $('btn-save').addEventListener('click', () => this.saveProject());
     $('btn-export').addEventListener('click', () => this.export());
+    $('btn-export-parts').addEventListener('click', () => this.exportParts());
     $('btn-play').addEventListener('click', () => this.togglePlay());
-    $('btn-start').addEventListener('click', () => this.navPause(() => this.seekTo(0)));
-    $('btn-end').addEventListener('click', () => this.navPause(() => this.seekTo(this.state.duration)));
+    $('btn-start').addEventListener('click', () => this.navPause(() => this.homeNav()));
+    $('btn-end').addEventListener('click', () => this.navPause(() => this.endNav()));
     $('btn-prevblock').addEventListener('click', () => this.navPause(() => this.prevBlock()));
     $('btn-nextblock').addEventListener('click', () => this.navPause(() => this.nextBlock()));
     $('btn-prevkf').addEventListener('click', () => this.navPause(() => this.prevKeyframe()));
@@ -1371,9 +1961,16 @@ const app = {
         this.updateStats();
         this.setStatus('Video duration corrected to ' + fmtTime(vd, false));
       }
+      if (this._pendingSeek != null) {
+        const t = this._pendingSeek;
+        this._pendingSeek = null;
+        if (Number.isFinite(this.video.duration) && this.video.duration > 0) {
+          this.video.currentTime = Math.min(Math.max(0, t), this.video.duration);
+        }
+      }
     });
     this.video.addEventListener('timeupdate', () => {
-      if (!this.video.paused && !this.timeline.drag) this.guardPlayback();
+      if (!this.video.paused && !(this.timeline.drag && this.timeline.drag.mode !== 'pan')) this.guardPlayback();
     });
     this.video.addEventListener('play', () => {
       this.timeline.playing = true;
@@ -1403,7 +2000,7 @@ const app = {
   startPlaybackGuard() {
     if (this._pg) return;
     const tick = () => {
-      if (!this.video.paused && !this.timeline.drag) this.guardPlayback();
+      if (!this.video.paused && !(this.timeline.drag && this.timeline.drag.mode !== 'pan')) this.guardPlayback();
       this._pg = requestAnimationFrame(tick);
     };
     this._pg = requestAnimationFrame(tick);
@@ -1417,8 +2014,14 @@ const app = {
     const g = this.guardTarget(this.video.currentTime);
     if (g) {
       if (g.type === 'pause') {
-        
-        this.skipTo(Math.max(0, g.at - SEEK_EPS), true);
+        this.skipTo(g.exact ? g.at : Math.max(0, g.at - SEEK_EPS), true);
+        if (g.exact) {
+          this.state.cursor = g.at;
+          this.timeline.cursor = g.at;
+          this.timeline.needsRender = true;
+          this.timeline.tick();
+          this.updateTimeDisplay();
+        }
       } else {
         
         
@@ -1432,6 +2035,7 @@ const app = {
     if (Math.abs(t - this.state.cursor) > CARET_UPDATE_MS) {
       this.state.cursor = t;
       this.timeline.cursor = t;
+      this.timeline.activeBlock = null;
       this.timeline.needsRender = true;
       this.timeline.tick();
       this.updateTimeDisplay();
@@ -1491,15 +2095,20 @@ const app = {
 
 
 
-
 guardTarget(t) {
     const cuts = this.model.cuts;
+    const markers = this.timeline ? this.timeline.sortedMarkers() : [];
+    let prev = 0;
+    for (const m of markers) {
+      if (m.off && t >= prev - 1e-6 && t < m.t - 1e-6) {
+        return { type: 'seek', at: m.t };
+      }
+      prev = m.t;
+    }
     
     
     
-    
-    
-    const i = this.model.segmentOf(t + SEEK_EPS); 
+    const i = this.model.segmentOf(t + SEEK_EPS);
     if (i < this.model.deleted.length && this.model.deleted[i]) {
       
       
@@ -1518,19 +2127,35 @@ guardTarget(t) {
 
   bindKeys() {
     window.addEventListener('keydown', (e) => {
+      if (e.target && e.target.tagName === 'INPUT') return;
+      this.timeline.setCtrlHeld(e.ctrlKey || e.metaKey);
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.code === 'KeyO') { e.preventDefault(); this.openFile(); return; }
-      if (mod && e.code === 'KeyS') { e.preventDefault(); this.saveProject(); return; }
+      if (mod && !e.shiftKey && e.code === 'KeyS') { e.preventDefault(); this.saveProject(); return; }
+      if (mod && e.shiftKey && e.code === 'KeyS') { e.preventDefault(); this.navPause(() => this.homeNav()); return; }
       if (mod && e.code === 'KeyE') { e.preventDefault(); this.export(); return; }
       if (mod && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
       if (mod && e.code === 'KeyY') { e.preventDefault(); this.redo(); return; }
+      if (mod && e.shiftKey && e.code === 'KeyF') { e.preventDefault(); this.navPause(() => this.endNav()); return; }
       if (e.code === 'Space') { e.preventDefault(); this.cancelStepPause(); this.togglePlay(); return; }
+      if (e.code === 'KeyM') { e.preventDefault(); this.timeline.addMarkerAt(this.state.cursor); return; }
       if (e.code === 'KeyC') { e.preventDefault(); this.cancelStepPause(); this.cut(); return; }
-      if (e.code === 'KeyX' || e.code === 'Delete' || e.code === 'Backspace') { e.preventDefault(); this.cancelStepPause(); this.deleteSegment(); return; }
+      if (e.code === 'KeyX' || e.code === 'Delete' || e.code === 'Backspace') {
+        if (this._markerBubbleId != null) {
+          e.preventDefault();
+          const id = this._markerBubbleId;
+          this.hideMarkerBubble();
+          this.deleteActiveMarker(id);
+          return;
+        }
+        e.preventDefault(); this.cancelStepPause(); this.deleteSegment(); return;
+      }
       if (e.code === 'KeyR') { e.preventDefault(); this.cancelStepPause(); this.restoreSegment(); return; }
-      if (e.code === 'KeyV') { e.preventDefault(); this.cancelStepPause(); this.mergeSelected(); return; }
-      if (e.code === 'BracketLeft') { e.preventDefault(); this.navPause(() => this.seekTo(0)); return; }
-      if (e.code === 'BracketRight') { e.preventDefault(); this.navPause(() => this.seekTo(this.state.duration)); return; }
+      if (e.code === 'KeyE') { e.preventDefault(); this.cancelStepPause(); this.mergeSelected(); return; }
+      if (e.code === 'BracketLeft') { e.preventDefault(); this.navPause(() => this.homeNav()); return; }
+      if (e.code === 'BracketRight') { e.preventDefault(); this.navPause(() => this.endNav()); return; }
+      if (e.code === 'Home') { e.preventDefault(); this.navPause(() => this.seekTo(0)); return; }
+      if (e.code === 'End') { e.preventDefault(); this.navPause(() => this.seekTo(this.state.duration)); return; }
       
       
       if (e.code === 'KeyS' || e.code === 'ArrowLeft') {
@@ -1547,21 +2172,99 @@ guardTarget(t) {
       }
       if (e.code === 'Escape') {
         this.cancelStepPause();
+        if (this._markerBubbleId != null) { this.hideMarkerBubble(); return; }
         const hm = $('help-modal');
         if (hm && !hm.classList.contains('hidden')) { hm.classList.add('hidden'); return; }
         this.pause();
       }
     });
     window.addEventListener('keyup', (e) => {
+      this.timeline.setCtrlHeld(e.ctrlKey || e.metaKey);
       if (e.code === 'KeyS' || e.code === 'KeyF' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
         this.releaseFrameNav();
       }
     });
+    window.addEventListener('blur', () => this.timeline.setCtrlHeld(false));
   },
 
   setStatus(text, spin = false) {
     $('status-text').textContent = text;
     $('spinner').classList.toggle('hidden', !spin);
+  },
+
+  markerBubble(m) {
+    this._markerBubbleId = m.id;
+    const inp = $('marker-name');
+    inp.value = m.name;
+    inp.classList.remove('dup');
+    $('marker-warn').classList.add('hidden');
+    const offBtn = $('marker-off');
+    offBtn.textContent = m.off ? 'On' : 'Off';
+    offBtn.title = m.off ? 'Enable this part for export' : 'Disable this part for export';
+    offBtn.classList.toggle('on', !!m.off);
+    const b = $('marker-bubble');
+    b.classList.remove('hidden');
+    this.syncMarkerBubble();
+  },
+
+  hideMarkerBubble() {
+    this._markerBubbleId = null;
+    $('marker-name').classList.remove('dup');
+    $('marker-warn').classList.add('hidden');
+    $('marker-bubble').classList.add('hidden');
+  },
+
+  syncMarkerBubble() {
+    const b = $('marker-bubble');
+    if (b.classList.contains('hidden') || this._markerBubbleId == null) return;
+    const m = this.timeline.markers.find((x) => x.id === this._markerBubbleId);
+    if (!m) { this.hideMarkerBubble(); return; }
+    const canvas = $('timeline');
+    const x = canvas.offsetLeft + this.timeline.timeToX(m.t);
+    b.style.left = x + 'px';
+  },
+
+  syncExportButton() {
+    const has = this.hasMarkers() && this.markersHaveContent();
+    const btn = $('btn-export-parts');
+    btn.style.display = has ? '' : 'none';
+    btn.disabled = !has;
+    $('btn-start').title = has ? 'Previous marker' : 'Go to start of project';
+    $('btn-end').title = has ? 'Next marker' : 'Go to end of project';
+  },
+
+  markersHaveContent() {
+    const t = this.timeline;
+    if (!t || !t.markers || !t.markers.length || !this.model) return false;
+    const runs = this.exportableRuns();
+    const markers = t.sortedMarkers();
+    let prev = 0;
+    for (const m of markers) {
+      if (m.off) { prev = m.t; continue; }
+      if (clipRuns(runs, prev, m.t).length) return true;
+      prev = m.t;
+    }
+    return false;
+  },
+
+  exportableRuns() {
+    let runs = this.model.keptRuns();
+    const markers = (this.timeline && this.timeline.markers) ? this.timeline.sortedMarkers() : [];
+    let prev = 0;
+    for (const m of markers) {
+      if (m.off) runs = subtractRuns(runs, prev, m.t);
+      prev = m.t;
+    }
+    return runs;
+  },
+
+  deleteActiveMarker(id) {
+    if (id == null) return;
+    this.timeline.markers = this.timeline.markers.filter((x) => x.id !== id);
+    this.timeline.needsRender = true;
+    this.timeline.tick();
+    this.timeline.onMarkersChange();
+    this.model.snapshot();
   },
 
   toggleHelp() {
@@ -1584,8 +2287,10 @@ guardTarget(t) {
   updateStats() {
     const s = this.model.stats();
     const keptPct = this.state.duration > 0 ? Math.round((s.kept / this.state.duration) * 100) : 0;
+    const markers = (this.timeline && this.timeline.markers && this.timeline.markers.length) || 0;
     $('stats').innerHTML =
       `<span>Cuts <b>${s.cuts}</b></span>` +
+      (markers ? `<span>Markers <b>${markers}</b></span>` : '') +
       `<span>Kept <b>${fmtTime(s.kept, false)}</b> / ${fmtTime(this.state.duration, false)} <b>(${keptPct}%)</b></span>`;
   },
 
@@ -1636,7 +2341,10 @@ guardTarget(t) {
     }
     const arr = Array.from(set).sort((x, y) => x - y);
     this.state.activeKeys = arr;
-    if (this.timeline) this.timeline.activeKeys = arr;
+    if (this.timeline) {
+      this.timeline.activeKeys = arr;
+      this.timeline.activeBlock = null;
+    }
   },
 
   
@@ -1730,12 +2438,14 @@ guardTarget(t) {
       return;
     }
     this.state.source = path;
+    window.keycut.lockSource(path);
     this.state.projectPath = null;
     this.cancelSkipMute();
     this.stopPlaybackGuard();
     this.cancelStepPause();
     this.model.clearHistory();
     this.model.reset(meta.duration);
+    this.timeline.markers = [];
     this.model.snapshot();
     this.video.src = toFileUrl(path);
     this.video.load();
@@ -1806,9 +2516,12 @@ frameDeleted(t) {
 
 
   seek(t) {
+    if (this.timeline) this.timeline.activeBlock = null;
     this.state.cursor = t;
     if (this.video.readyState > 0) {
       this.video.currentTime = t;
+    } else {
+      this._pendingSeek = t;
     }
     this.updateTimeDisplay();
   },
@@ -1818,6 +2531,7 @@ frameDeleted(t) {
     
     const t = snapKey(this.state.cursor, this.state.activeKeys || this.state.keyTimes);
     const before = this.timeline.captureCornerTargets();
+    const leftBlock = this.model.segmentOf(t);
     if (this.model.split(t)) {
       this.refreshActiveKeys();
       this.timeline.applyCornerChange(before);
@@ -1826,6 +2540,9 @@ frameDeleted(t) {
       this.timeline.needsRender = true;
       this.timeline.tick();
       this.seek(t);
+      this.timeline.activeBlock = leftBlock;
+      this.timeline.needsRender = true;
+      this.timeline.tick();
       this.updateStats();
       this.setStatus('Cut at ' + fmtTime(t, true));
     }
@@ -1836,7 +2553,7 @@ frameDeleted(t) {
   activeIndices() {
     const s = this.timeline.selectionIndices();
     if (s.length) return s;
-    return [this.model.segmentOf(this.state.cursor)];
+    return [this.timeline.activeIndex()];
   },
 
   
@@ -1858,6 +2575,7 @@ frameDeleted(t) {
   restoreSegment() {
     if (!this.state.source) return;
     const idx = this.activeIndices();
+    if (this.selectionMixed()) return;
     const before = this.timeline.captureCornerTargets();
     if (this.model.restoreIndices(idx)) {
       this.refreshActiveKeys();
@@ -1869,16 +2587,28 @@ frameDeleted(t) {
     }
   },
 
+  selectionMixed() {
+    const idx = this.timeline.selectionIndices();
+    if (!idx.length) return false;
+    let gray = false;
+    let blue = false;
+    for (const i of idx) {
+      if (this.model.deleted[i]) gray = true;
+      else blue = true;
+    }
+    return gray && blue;
+  },
+
   
   
   mergeSelected() {
     if (!this.state.source) return;
-    const idx = this.activeIndices().sort((a, b) => a - b);
+    const idx = this.activeIndices().slice().sort((a, b) => a - b);
+    if (!idx.length) return;
+    if (this.selectionMixed()) return;
     let a = idx[0];
     let b = idx[idx.length - 1];
-    
-    
-    if (a === b) b = a + 1;
+    if (a === b) return;
     const before = this.timeline.captureCornerTargets();
     if (this.model.mergeRange(a, b)) {
       this.refreshActiveKeys();
@@ -1886,6 +2616,11 @@ frameDeleted(t) {
       this.timeline.selected = [a, a];
       this.timeline.selectedAnchor = a;
       this.timeline.selectedSet = null;
+      this.model.updateCurrentSelection({
+        selected: this.timeline.selected ? this.timeline.selected.slice() : null,
+        selectedSet: this.timeline.selectedSet ? [...this.timeline.selectedSet] : null,
+        selectedAnchor: this.timeline.selectedAnchor
+      });
       this.timeline.needsRender = true;
       this.timeline.tick();
       this.updateStats();
@@ -1968,6 +2703,49 @@ frameDeleted(t) {
       if (s > t + 1e-6) { this.seekTo(s); return; }
     }
     this.setStatus('No next block');
+  },
+
+  hasMarkers() {
+    return this.timeline && this.timeline.markers && this.timeline.markers.length;
+  },
+
+  homeNav() {
+    if (this.hasMarkers()) this.prevMarker();
+    else this.seekTo(0);
+  },
+
+  endNav() {
+    if (this.hasMarkers()) this.nextMarker();
+    else this.seekTo(this.state.duration);
+  },
+
+  prevMarker() {
+    const markers = this.timeline.sortedMarkers();
+    if (!markers.length) { this.seekTo(0); return; }
+    const t = this.state.cursor;
+    let best = null;
+    for (const m of markers) if (m.t < t - 1e-6) best = m.t; else break;
+    if (best != null) this.seekToMarker(best);
+    else this.seekTo(0);
+  },
+
+  nextMarker() {
+    const markers = this.timeline.sortedMarkers();
+    if (!markers.length) { this.seekTo(this.state.duration); return; }
+    const t = this.state.cursor;
+    let best = null;
+    for (const m of markers) if (m.t > t + 1e-6) { best = m.t; break; }
+    if (best != null) this.seekToMarker(best);
+    else this.seekTo(this.state.duration);
+  },
+
+  seekToMarker(t) {
+    this.state.cursor = t;
+    this.timeline.cursor = t;
+    this.timeline.needsRender = true;
+    this.timeline.tick();
+    this.seek(t);
+    this.ensureCursorVisible();
   },
 
   
@@ -2118,7 +2896,9 @@ releaseFrameNav() {
       cuts: this.model.cuts,
       deleted: this.model.deleted,
       cursor: this.state.cursor,
-      zoom: this.timeline ? this.timeline.pxPerSec : 0
+      zoom: this.timeline ? this.timeline.pxPerSec : 0,
+      viewStart: this.timeline ? this.timeline.viewStart : 0,
+      markers: this.timeline ? this.timeline.markers : []
     };
     const res = await window.keycut.saveProject(filePath, data);
     if (res && res.ok) {
@@ -2151,13 +2931,14 @@ releaseFrameNav() {
     }
 
     this.state.source = data.src;
+    window.keycut.lockSource(data.src);
     this.state.projectPath = filePath;
     const duration = (data.video && data.video.dur) || meta.duration;
+    const tl = this.timeline;
     this.model.clearHistory();
     this.model.cuts = data.cuts;
     this.model.deleted = data.deleted;
     this.model.duration = duration;
-    this.model.snapshot();
     this.cancelSkipMute();
     this.stopPlaybackGuard();
     this.cancelStepPause();
@@ -2176,38 +2957,116 @@ releaseFrameNav() {
       keyTimes: data.keys && data.keys.length ? data.keys : meta.keyTimes
     });
 
-    
-    
-    
-    const tl = this.timeline;
-    if (data.zoom > 0) tl.pxPerSec = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, data.zoom));
+    tl.markers = (data.markers || []).map((m, i) => ({ id: ++tl._markerSeq, t: m.t, name: m.name || '', color: m.color || '#7bd88f', off: !!m.off }));
+    if (data.zoom > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(ZOOM_MAX, data.zoom));
+    if (typeof data.viewStart === 'number') tl.viewStart = data.viewStart;
+    this.syncExportButton();
     const c = Math.min(Math.max(0, data.cursor || 0), duration);
     this.seek(c);
     tl.cursor = c;
-    const viewW = tl.w / tl.pxPerSec;
-    if (c > 0.05 && c < duration - 0.05) {
-      tl.viewStart = Math.max(0, Math.min(c - viewW / 2, duration - viewW));
-    } else {
-      tl.viewStart = 0;
-    }
     tl.clampView();
     tl.needsRender = true;
     tl.tick();
+    this.model.snapshot();
+    this.state.dirty = false;
+    this.$labelUpdate();
     this.updateStats();
     this.setStatus('Project loaded: ' + filePath);
   },
 
   async export() {
     if (this.state.exporting) return;
-    const runs = this.model.keptRuns();
+    const runs = this.exportableRuns();
     if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
 
     const base = this.state.source.split(/[\\/]/).pop().replace(/\.[^.]+$/, '') + '.mp4';
     const outPath = await window.keycut.saveExportDialog(base);
     if (!outPath) return;
+    if (this.isSourcePath(outPath)) {
+      this.setStatus('Export cancelled: output file cannot overwrite the source "' + this.state.source.split(/[\\/]/).pop() + '"');
+      return;
+    }
+    await this.runExports([{ segments: runs, out: outPath }], false);
+  },
 
+  isSourcePath(p) {
+    if (!this.state.source || !p) return false;
+    return p.replace(/\\/g, '/').toLowerCase() === this.state.source.replace(/\\/g, '/').toLowerCase();
+  },
+
+  async exportMarkerPart(id) {
+    if (this.state.exporting) return;
+    const m = this.timeline.markers.find((x) => x.id === id);
+    if (!m) return;
+    const markers = this.timeline.sortedMarkers();
+    let prev = 0;
+    for (const mm of markers) {
+      if (mm.id === m.id) break;
+      prev = mm.t;
+    }
+    const segs = clipRuns(this.model.keptRuns(), prev, m.t);
+    if (!segs.length) { this.setStatus('This part contains no kept content'); return; }
+    const base = safeFileName(m.name || 'part') + '.mp4';
+    const outPath = await window.keycut.saveExportDialog(base);
+    if (!outPath) return;
+    if (this.isSourcePath(outPath)) {
+      this.setStatus('Export cancelled: output file cannot overwrite the source "' + this.state.source.split(/[\\/]/).pop() + '"');
+      return;
+    }
+    await this.runExports([{ segments: segs, out: outPath }], false);
+  },
+
+  async exportParts() {
+    if (this.state.exporting) return;
+    const runs = this.exportableRuns();
+    if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
+    const markers = (this.timeline && this.timeline.markers && this.timeline.markers.length)
+      ? this.timeline.markers.slice().sort((a, b) => a.t - b.t)
+      : null;
+    if (!markers || !markers.length) { this.setStatus('Place at least one marker to export parts'); return; }
+    const folder = await window.keycut.pickFolder();
+    if (!folder) return;
+    const srcNorm = (this.state.source || '').replace(/\\/g, '/').toLowerCase();
+    const srcName = this.state.source.split(/[\\/]/).pop();
+    const jobs = [];
+    let prev = 0;
+    let skipped = 0;
+    let skippedNames = [];
+    for (const m of markers) {
+      if (m.off) { prev = m.t; continue; }
+      const segs = clipRuns(runs, prev, m.t);
+      if (segs.length) {
+        const out = folder + '/' + safeFileName(m.name) + '.mp4';
+        if (out.replace(/\\/g, '/').toLowerCase() === srcNorm) {
+          skipped++;
+          skippedNames.push(m.name || 'part');
+          prev = m.t;
+          continue;
+        }
+        jobs.push({ segments: segs, out });
+      }
+      prev = m.t;
+    }
+    if (!jobs.length) {
+      if (skipped) {
+        const msg = 'Cannot export: a part cannot be named like the original file "' + srcName + '"';
+        this.setStatus(msg);
+        window.alert(msg);
+      } else this.setStatus('Markers cover no kept content');
+      return;
+    }
+    await this.runExports(jobs, true);
+    if (skipped) {
+      const msg = 'Part name cannot match the original file "' + srcName + '" - skipped: ' + skippedNames.join(', ');
+      this.setStatus(msg);
+      window.alert(msg);
+    }
+  },
+
+  async runExports(jobs, multi) {
     this.state.exporting = true;
     $('btn-export').disabled = true;
+    $('btn-export-parts').disabled = true;
     if (this.video && !this.video.paused) this.pause();
     this.setStatus('Exporting…', true);
     this.setProgress(0);
@@ -2231,23 +3090,30 @@ releaseFrameNav() {
       }
     });
 
-    const res = await window.keycut.exportStart({
-      sourcePath: this.state.source,
-      segments: runs,
-      outputPath: outPath
-    });
+    let ok = true;
+    let lastErr = '';
+    for (let i = 0; i < jobs.length; i++) {
+      setModalStatus((multi ? (i + 1) + '/' + jobs.length + ' — ' : '') + 'Cutting…');
+      const res = await window.keycut.exportStart({
+        sourcePath: this.state.source,
+        segments: jobs[i].segments,
+        outputPath: jobs[i].out
+      });
+      if (!(res && res.ok)) { ok = false; lastErr = res && res.error ? res.error : 'unknown error'; break; }
+    }
 
     unsub();
     this.state.exporting = false;
     $('btn-export').disabled = false;
+    this.syncExportButton();
     this.setProgress(null);
     this.setStatus('', false);
     $('export-modal').classList.add('hidden');
 
-    if (res && res.ok) {
-      this.setStatus('Export complete: ' + outPath);
+    if (ok) {
+      this.setStatus(multi ? 'Export parts complete: ' + jobs.length + ' files' : 'Export complete: ' + jobs[0].out);
     } else {
-      this.setStatus('Export failed: ' + (res && res.error ? res.error : 'unknown error'));
+      this.setStatus('Export failed: ' + lastErr);
     }
   }
 };

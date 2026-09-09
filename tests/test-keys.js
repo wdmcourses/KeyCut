@@ -66,13 +66,16 @@ app.whenReady().then(async () => {
   await sendKey('KeyC', 'c');
   const cuts1 = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   check('C cuts at keyframe -> [0,k1,10]', cuts1.length === 3 && near(cuts1[1], k1));
+  const active1 = await js(`window.__app.timeline.activeIndex()`);
+  check('cut leaves the left block active', active1 === 0);
 
   
-  console.log('[2] click selects segment');
+  console.log('[2] click scrubs to active block');
   await clickAt(k2, 48); 
-  const sel = await js(`({idx: window.__app.timeline.selectedIndex, cursor: window.__app.state.cursor})`);
-  check('selected segment index = 1 ([k1,10])', sel.idx === 1);
-  check('cursor snapped to k2', near(sel.cursor, k2));
+  const sel = await js(`({idx: window.__app.timeline.selectedIndex, cursor: window.__app.state.cursor, active: window.__app.activeIndices()})`);
+  check('click does not leave stale selection', sel.idx === null);
+  check('click snaps to the keyframe left of click', near(sel.cursor, keys[7]));
+  check('active block = clicked block', sel.active[0] === 1);
 
   
   console.log('[3] X dims the selected segment');
@@ -196,11 +199,12 @@ app.whenReady().then(async () => {
   
   await clickAt(k1 / 2, 48);
   const sel0 = await js(`window.__app.timeline.selected`);
-  check('click selects single [0,0]', sel0[0] === 0 && sel0[1] === 0);
-  await clickAt((k2 + k3) / 2, 48, true); 
-  const sel1 = await js(`window.__app.timeline.selected`);
-  check('shift+click extends to [0,2]', sel1[0] === 0 && sel1[1] === 2);
-  await sendKey('KeyV', 'v');
+  check('click does not select single', sel0 === null);
+  await clickAt((k2 + k3) / 2, 48, false, true);
+  await clickAt(k1 / 2, 48, false, true);
+  const sel1 = await js(`window.__app.timeline.selectionIndices().sort((a, b) => a - b)`);
+  check('alt+click multi-selects [0,2]', sel1[0] === 0 && sel1[1] === 2);
+  await sendKey('KeyE', 'e');
   const afterU = await js(`({cuts: window.__app.model.cuts, del: window.__app.model.deleted})`);
   check('U merges [0,2] -> cuts [0,k3,10]', afterU.cuts.length === 3 && near(afterU.cuts[1], k3));
   check('merged block kept', afterU.del.every((d) => d === false));
@@ -209,10 +213,6 @@ app.whenReady().then(async () => {
   await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot();`);
   await js(`window.__app.timeline.selectedIndex = null; window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut(); window.__app.seekTo(${k3}); window.__app.cut();`);
   await js(`window.__app.timeline.selectedIndex = 1; window.__app.deleteSegment();`); 
-  await clickAt(k1 / 2, 48); 
-  await clickAt((k2 + k3) / 2, 48, true); 
-  const sGray = await js(`window.__app.timeline.selected`);
-  check('selection does not cross gray -> [0,0]', sGray[0] === 0 && sGray[1] === 0);
   const mergeBlocked = await js(`window.__app.model.mergeRange(0, 2)`);
   check('merge blocked across gray', mergeBlocked === false);
   const singleMerge = await js(`window.__app.model.mergeRange(0, 0)`);
@@ -259,15 +259,53 @@ app.whenReady().then(async () => {
   await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys();`);
   await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut();`);
   const r4 = await js(`window.__app.model.moveBoundary(1, ${k1 + 0.1})`);
-  check('no resize between two kept blocks', r4 === 0);
+  cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  const del4 = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
+  check('trim right kept: gray gap created, split point stays', r4 === 1 && near(cuts[1], k1) && near(cuts[2], k1 + 0.1) && del4[1] === true);
   
   await js(`window.__app.timeline.selectedIndex = 1; window.__app.deleteSegment();`); 
   const hitK = await js(`(() => {
     const T = window.__app.timeline;
-    const px = (${k1} + 0.01 - T.viewStart) * T.pxPerSec;
+    const px = (${k1} + 0.11 - T.viewStart) * T.pxPerSec;
     return T.resizeBoundaryAt(px);
   })()`);
-  check('resize handle detected at kept|gray boundary', hitK === 1);
+  check('resize handle detected at kept|gray boundary', hitK === 2);
+
+  console.log('[14b] kept|kept trim sides explicit');
+  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys();`);
+  await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut();`);
+  const rL = await js(`window.__app.model.moveBoundary(1, ${k1 - 0.2}, 'left')`);
+  cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  let del14 = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
+  check('trim left: gray gap left of split', rL === 1 && near(cuts[1], k1 - 0.2) && near(cuts[2], k1) && del14[1] === true);
+  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys();`);
+  await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut();`);
+  const rR = await js(`window.__app.model.moveBoundary(1, ${k1 + 0.2}, 'right')`);
+  cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  del14 = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
+  check('trim right: gray gap right of split', rR === 1 && near(cuts[1], k1) && near(cuts[2], k1 + 0.2) && del14[1] === true);
+
+  console.log('[14c] right-trim drag continues, left stays put');
+  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys(); window.__app.timeline.selectedIndex = null;`);
+  await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut(); window.__app.seekTo(${k3}); window.__app.cut();`);
+  await js(`(() => {
+    const A = window.__app, T = A.timeline;
+    const c = document.querySelector('#timeline');
+    const r = c.getBoundingClientRect();
+    const px = (t) => (t - T.viewStart) * T.pxPerSec;
+    const cx = (t) => r.left + px(t);
+    const y = r.top + 26;
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ControlLeft', key: 'Control', bubbles: true, cancelable: true, ctrlKey: true }));
+    c.dispatchEvent(new MouseEvent('mousedown', { clientX: cx(${k2}) + 3, clientY: y, bubbles: true, cancelable: true, button: 0 }));
+    c.dispatchEvent(new MouseEvent('mousemove', { clientX: cx(4.6), clientY: y, bubbles: true, cancelable: true, button: 0 }));
+    c.dispatchEvent(new MouseEvent('mousemove', { clientX: cx(4.9), clientY: y, bubbles: true, cancelable: true, button: 0 }));
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ControlLeft', key: 'Control', bubbles: true, cancelable: true }));
+    return true;
+  })()`);
+  const dragCuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  const dragDel = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
+  check('right-trim across 2 keys: split point stays, gray grows', dragCuts.length === 6 && near(dragCuts[2], k2) && near(dragCuts[3], 5) && dragDel[2] === true && near(dragCuts[1], k1));
 
   
   console.log('[15] shrink blue into gray');
@@ -306,19 +344,36 @@ app.whenReady().then(async () => {
   check('unmuted after seeked', mutedAfter === false);
 
   
-  console.log('[18] merge gray blocks');
-  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys();`);
+  console.log('[18] merge pure gray blocks');
+  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys(); window.__app.timeline.selectedIndex = null;`);
   await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut(); window.__app.seekTo(${k3}); window.__app.cut();`);
   await js(`window.__app.timeline.selectedIndex = 1; window.__app.deleteSegment(); window.__app.timeline.selectedIndex = 2; window.__app.deleteSegment();`); 
-  
+  await js(`window.__app.timeline.selectedIndex = null;`);
   await clickAt((k1 + k2) / 2, 48); 
-  await clickAt((k2 + k3) / 2, 48, true); 
-  const gSel = await js(`window.__app.timeline.selected`);
+  await clickAt((k2 + k3) / 2, 48, false, true); 
+  const gSel = await js(`window.__app.timeline.selectionIndices().sort((a, b) => a - b)`);
   check('gray run multi-select [1,2]', gSel[0] === 1 && gSel[1] === 2);
-  await sendKey('KeyV', 'v');
+  await sendKey('KeyE', 'e');
   const gCuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   const gDel = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
-  check('U merges gray [1,2] -> cuts [0,k1,k3,10] gray', gCuts.length === 4 && near(gCuts[1], k1) && near(gCuts[2], k3) && gDel[1] === true);
+  check('V merges pure gray [1,2] -> one gray', gCuts.length === 4 && near(gCuts[1], k1) && near(gCuts[2], k3) && gDel[1] === true);
+
+  console.log('[18b] merge blocked on mixed gray + blue');
+  await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys(); window.__app.timeline.selectedIndex = null;`);
+  await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut(); window.__app.seekTo(${k3}); window.__app.cut();`);
+  await js(`window.__app.timeline.selectedIndex = 1; window.__app.deleteSegment(); window.__app.timeline.selectedIndex = 2; window.__app.deleteSegment();`);
+  await js(`window.__app.timeline.selectedIndex = null;`);
+  await clickAt(k1 / 2, 48);
+  await clickAt((k1 + k2) / 2, 48, false, true);
+  await clickAt((k2 + k3) / 2, 48, false, true);
+  await sendKey('KeyE', 'e');
+  const gbCuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  const gbDel = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
+  check('V blocked on mixed selection', gbCuts.length === 5 && gbDel[1] === true && gbDel[2] === true);
+  await sendKey('KeyR', 'r');
+  const gbCuts2 = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
+  const gbDel2 = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
+  check('R blocked on mixed selection', gbCuts2.length === 5 && gbDel2[1] === true && gbDel2[2] === true);
 
   
   console.log('[19] tap + hold frame navigation');
@@ -452,7 +507,7 @@ app.whenReady().then(async () => {
   console.log('[26] Alt+click multi-select');
   await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys(); window.__app.timeline.selectedIndex = null;`);
   await js(`window.__app.timeline.selectedIndex = null; window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut(); window.__app.seekTo(${k3}); window.__app.cut();`);
-  await clickAt((k1 + k2) / 2, 48, false, true); 
+  await clickAt((k1 + k2) / 2, 48); 
   await clickAt((k2 + k3) / 2, 48, false, true); 
   const altSel = JSON.parse(await js(`JSON.stringify([...window.__app.timeline.selectionIndices()].sort((a, b) => a - b))`));
   check('alt+click gathers both segments', altSel.length === 2 && altSel[0] === 1 && altSel[1] === 2);
@@ -464,7 +519,7 @@ app.whenReady().then(async () => {
   check('undo reverts all dimmed in one step', delUndo[1] === false && delUndo[2] === false);
   await clickAt(k1 + 0.1, 48); 
   const cleared = await js(`window.__app.timeline.selectionIndices().length`);
-  check('plain click clears multi-select', cleared === 1);
+  check('plain click clears multi-select', cleared === 0);
 
   
   console.log('[27] resize drag coalesced undo');
@@ -511,9 +566,13 @@ app.whenReady().then(async () => {
   await sendCtrl('KeyZ', 'z');
   const mUndo = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   check('undo merge -> split restored', mUndo.length === 4 && near(mUndo[1], k1) && near(mUndo[2], k2));
+  const selUndo = await js(`window.__app.timeline.selectionIndices().sort((a, b) => a - b)`);
+  check('undo restores the multi-selection', selUndo[0] === 1 && selUndo[1] === 2);
   await sendCtrl('KeyZ', 'z', true);
   const mRedo = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   check('redo merge -> re-merges', mRedo.length === 3 && near(mRedo[1], k1));
+  const selRedo = await js(`window.__app.timeline.selected`);
+  check('redo restores the merged selection', selRedo[0] === 1 && selRedo[1] === 1);
   await sendCtrl('KeyZ', 'z', true); 
   await sendCtrl('KeyZ', 'z');
   const mUndo2 = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));

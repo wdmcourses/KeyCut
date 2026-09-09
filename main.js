@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const { registerIpc } = require('./lib/ipc');
 
 const APP_ROOT = path.join(__dirname);
@@ -21,6 +22,18 @@ try {
 let mainWindow = null;
 let pendingOpenFile = null;
 let forceClose = false;
+let lockProc = null;
+
+function lockSource(filePath) {
+  if (lockProc) {
+    try { lockProc.kill(); } catch {}
+    lockProc = null;
+  }
+  if (!filePath) return;
+  const p = filePath.replace(/'/g, "''");
+  const script = "$share = [IO.FileShare]::Read; $share = $share -bor [IO.FileShare]::Write; try { $fs = New-Object IO.FileStream('" + p + "', [IO.FileMode]::Open, [IO.FileAccess]::Read, $share); while ($true) { Start-Sleep -Seconds 3600 } } catch {}";
+  lockProc = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], { stdio: 'ignore', windowsHide: true });
+}
 
 
 
@@ -93,11 +106,21 @@ app.whenReady().then(() => {
     pendingOpenFile = null;
     return f;
   });
+  ipcMain.handle('source:lock', (_e, filePath) => {
+    lockSource(filePath);
+  });
   registerIpc(() => mainWindow, APP_ROOT, TMP_DIR);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('will-quit', () => {
+  if (lockProc) {
+    try { lockProc.kill(); } catch {}
+    lockProc = null;
+  }
 });
 
 app.on('window-all-closed', () => {

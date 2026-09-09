@@ -10,10 +10,12 @@ contextBridge.exposeInMainWorld('keycut', {
   },
   saveProjectDialog: (defaultName) => ipcRenderer.invoke('dialog:saveProject', defaultName),
   saveExportDialog: (defaultName) => ipcRenderer.invoke('dialog:saveExport', defaultName),
+  pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
   getFilePath: (file) => webUtils.getPathForFile(file),
 
   probeVideo: (filePath) => ipcRenderer.invoke('probe:video', filePath),
   ffmpegPath: () => ipcRenderer.invoke('ffmpegPath'),
+  lockSource: (filePath) => ipcRenderer.invoke('source:lock', filePath),
 
   saveProject: (filePath, data) => ipcRenderer.invoke('project:save', { filePath, data }),
   loadProject: (filePath) => ipcRenderer.invoke('project:load', filePath),

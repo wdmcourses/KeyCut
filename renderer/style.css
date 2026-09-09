@@ -116,8 +116,8 @@ body {
 
 
 .toolbar-btn.compact {
-  padding: 5px 12px;
-  font-size: 12.5px;
+  padding: 4px 10px;
+  font-size: 12px;
   border-radius: var(--radius-sm);
 }
 .action-buttons { display: flex; align-items: center; gap: 6px; }
@@ -207,7 +207,7 @@ body {
 }
 
 .ctrl-btn {
-  width: 34px; height: 34px;
+  width: 33px; height: 33px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--panel-2);
@@ -271,7 +271,7 @@ body {
 
 #timeline {
   width: 100%;
-  height: 74px;
+  height: 86px;
   display: block;
   cursor: default;
   border-radius: var(--radius-sm);
@@ -285,6 +285,105 @@ body {
   border-radius: var(--radius);
   background: var(--scrollbar-track);
   cursor: pointer;
+}
+
+#marker-bubble {
+  position: absolute;
+  z-index: 20;
+  top: -66px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px;
+  background: var(--panel-2, #23272e);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  animation: markerBubbleIn .16s ease-out;
+}
+.marker-bubble-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+  width: 100%;
+}
+.marker-bubble-actions button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 0;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+}
+#marker-warn {
+  color: #ff7a80;
+  font-size: 11px;
+  padding-left: 2px;
+}
+#marker-warn.hidden { display: none; }
+#marker-name.dup { border-color: #e5484d; }
+@keyframes markerBubbleIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+#marker-bubble.hidden { display: none; }
+#marker-name {
+  width: 100%;
+  min-width: 230px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  outline: none;
+}
+#marker-name:focus { border-color: var(--accent); }
+#marker-ok {
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent-strong);
+}
+#marker-ok:hover { filter: brightness(1.08); }
+#marker-export {
+  color: var(--accent-strong);
+  background: rgba(63,162,255,.10);
+  border: 1px solid var(--accent);
+}
+#marker-export:hover { filter: brightness(1.12); }
+#marker-off {
+  min-width: 0;
+  color: #4ade80;
+  background: rgba(74,222,128,.10);
+  border: 1px solid rgba(74,222,128,.45);
+}
+#marker-off:hover { filter: brightness(1.1); }
+#marker-off.on {
+  color: #fff;
+  background: #e5484d;
+  border-color: #b53b40;
+}
+#marker-delete {
+  color: #ff7a80;
+  background: rgba(229,72,77,.10);
+  border: 1px solid rgba(229,72,77,.45);
+}
+#marker-delete:hover { filter: brightness(1.1); }
+#marker-bubble-arrow {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  border-right: 1px solid var(--border-hi);
+  border-bottom: 1px solid var(--border-hi);
+  transform: translateX(-50%) rotate(45deg) translateY(-50%);
 }
 #scrollbar-thumb {
   position: absolute;
@@ -480,9 +579,26 @@ body {
 #help-modal-body {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+.shortcut-group {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+  background: rgba(255,255,255,.015);
+}
+.shortcut-group.g-playback { background: rgba(90,160,255,.045); }
+.shortcut-group.g-edit { background: rgba(120,220,150,.045); }
+.shortcut-group.g-markers { background: rgba(255,190,90,.045); }
+.shortcut-group.g-history { background: rgba(200,150,255,.045); }
+.shortcut-group.g-project { background: rgba(90,220,220,.045); }
+.shortcut-group-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-dim);
+  padding: 7px 10px 3px;
 }
 .shortcut-row {
   display: grid;
@@ -496,10 +612,11 @@ body {
 .shortcut-row + .shortcut-row { border-top: 1px solid var(--border); }
 .shortcut-row .keys {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
-  white-space: nowrap;
+  gap: 3px 4px;
+  white-space: normal;
 }
 .shortcut-row kbd {
   background: var(--panel-2);

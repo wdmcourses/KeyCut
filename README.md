@@ -34,13 +34,17 @@ output keeps the original quality and the whole operation is fast.</p>
 | Space | Play / pause |
 | S / F | Previous / next keyframe |
 | Shift+S / Shift+F | Previous / next block |
-| [ / ] | To start / end of project |
+| [ / ] | Previous / next marker (or start / end) |
+| Home / End | Start / end of project |
+| M | Add marker at the caret |
 | C | Cut at the caret |
 | X / R | Delete / restore segment |
-| V | Merge segments |
-| Alt + click | Multi-select segments |
-| Ctrl+Z / Ctrl+Shift+Z | Undo / Redo |
+| E | Merge segments |
+| Alt + Click | Multi-select segments |
+| Ctrl + Hover | Resize segment edges |
+| Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo / Redo |
 | Ctrl+O / Ctrl+S | Open / save project |
+| Ctrl+Shift+S / Ctrl+Shift+F | Previous / next marker (or start / end) |
 | Ctrl+E | Export |
 
 ## Getting started
