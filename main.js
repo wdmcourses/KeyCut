@@ -5,7 +5,7 @@ const { spawn } = require('child_process');
 const { registerIpc } = require('./lib/ipc');
 
 const APP_ROOT = path.join(__dirname);
-const TMP_DIR = path.join(APP_ROOT, 'tmp');
+const TMP_DIR = path.join(app.getPath('temp'), 'keycut');
 
 
 

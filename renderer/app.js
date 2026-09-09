@@ -1812,7 +1812,7 @@ const app = {
       const m = this.timeline.markers.find((x) => x.id === id);
       const dup = !!(m && this.timeline.markers.some((x) => x.id !== id && x.name === clean));
       const srcName = this.state.source ? this.state.source.split(/[\\/]/).pop().toLowerCase() : '';
-      const srcCollide = !!(m && clean && (safeFileName(clean) + '.mp4').toLowerCase() === srcName);
+      const srcCollide = !!(m && clean && (safeFileName(clean) + this.sourceExt()).toLowerCase() === srcName);
       const warn = $('marker-warn');
       if (dup || srcCollide) {
         inp.classList.add('dup');
@@ -2309,6 +2309,10 @@ guardTarget(t) {
     this.state.height = meta.height;
     this.state.fps = meta.fps;
     this.state.keyTimes = meta.keyTimes;
+    this.state.pcmAudio = !!meta.pcmAudio;
+    this.state.videoTimebase = meta.videoTimebase || null;
+    this.state.hasThumbnail = !!meta.hasThumbnail;
+    this.state.streams = meta.streams || null;
     this.state.cursor = 0;
     this.state.model = this.model;
     this.updateTimeDisplay();
@@ -2954,7 +2958,11 @@ releaseFrameNav() {
       width: (data.video && data.video.w) || meta.width,
       height: (data.video && data.video.h) || meta.height,
       fps: (data.video && data.video.fps) || meta.fps,
-      keyTimes: data.keys && data.keys.length ? data.keys : meta.keyTimes
+      keyTimes: data.keys && data.keys.length ? data.keys : meta.keyTimes,
+      pcmAudio: meta.pcmAudio,
+      videoTimebase: meta.videoTimebase,
+      hasThumbnail: meta.hasThumbnail,
+      streams: meta.streams
     });
 
     tl.markers = (data.markers || []).map((m, i) => ({ id: ++tl._markerSeq, t: m.t, name: m.name || '', color: m.color || '#7bd88f', off: !!m.off }));
@@ -2979,7 +2987,7 @@ releaseFrameNav() {
     const runs = this.exportableRuns();
     if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
 
-    const base = this.state.source.split(/[\\/]/).pop().replace(/\.[^.]+$/, '') + '.mp4';
+    const base = this.state.source.split(/[\\/]/).pop();
     const outPath = await window.keycut.saveExportDialog(base);
     if (!outPath) return;
     if (this.isSourcePath(outPath)) {
@@ -2994,6 +3002,13 @@ releaseFrameNav() {
     return p.replace(/\\/g, '/').toLowerCase() === this.state.source.replace(/\\/g, '/').toLowerCase();
   },
 
+  sourceExt() {
+    const m = this.state.source ? this.state.source.match(/\.[^.\\/]+$/) : null;
+    let ext = (m && m[0]) || '.mp4';
+    if (this.state.pcmAudio && ['.mp4', '.m4v', '.3gp', '.3g2'].includes(ext.toLowerCase())) ext = '.mov';
+    return ext;
+  },
+
   async exportMarkerPart(id) {
     if (this.state.exporting) return;
     const m = this.timeline.markers.find((x) => x.id === id);
@@ -3006,7 +3021,7 @@ releaseFrameNav() {
     }
     const segs = clipRuns(this.model.keptRuns(), prev, m.t);
     if (!segs.length) { this.setStatus('This part contains no kept content'); return; }
-    const base = safeFileName(m.name || 'part') + '.mp4';
+    const base = safeFileName(m.name || 'part') + this.sourceExt();
     const outPath = await window.keycut.saveExportDialog(base);
     if (!outPath) return;
     if (this.isSourcePath(outPath)) {
@@ -3036,7 +3051,7 @@ releaseFrameNav() {
       if (m.off) { prev = m.t; continue; }
       const segs = clipRuns(runs, prev, m.t);
       if (segs.length) {
-        const out = folder + '/' + safeFileName(m.name) + '.mp4';
+        const out = folder + '/' + safeFileName(m.name) + this.sourceExt();
         if (out.replace(/\\/g, '/').toLowerCase() === srcNorm) {
           skipped++;
           skippedNames.push(m.name || 'part');
@@ -3097,7 +3112,10 @@ releaseFrameNav() {
       const res = await window.keycut.exportStart({
         sourcePath: this.state.source,
         segments: jobs[i].segments,
-        outputPath: jobs[i].out
+        outputPath: jobs[i].out,
+        videoTimebase: this.state.videoTimebase,
+        hasThumbnail: this.state.hasThumbnail,
+        streams: this.state.streams
       });
       if (!(res && res.ok)) { ok = false; lastErr = res && res.error ? res.error : 'unknown error'; break; }
     }
