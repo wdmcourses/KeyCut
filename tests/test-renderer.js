@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const fs = require('fs');
@@ -40,6 +40,8 @@ const check = (name, cond) => {
 app.whenReady().then(async () => {
   makeFixture();
   registerIpc(() => win, ROOT, TMP);
+  ipcMain.handle('get-open-file', () => null);
+  ipcMain.handle('source:lock', () => true);
   const win = new BrowserWindow({
     width: 1280, height: 800, show: false,
     webPreferences: { preload: path.join(ROOT, 'preload.js'), contextIsolation: true }
@@ -104,6 +106,7 @@ app.whenReady().then(async () => {
   await js(`window.__app.state.projectPath = '${PROJ.replace(/\\/g, '\\\\')}'; window.__app.saveProject();`);
   await new Promise((r) => setTimeout(r, 600));
   check('project file exists', fs.existsSync(PROJ));
+  check('no .back left after save', !fs.existsSync(PROJ + '.back'));
   const currentCuts = await js(`window.__app.model.cuts`);
   const currentDel = await js(`window.__app.model.deleted`);
   const loaded = await js(`window.keycut.loadProject('${PROJ.replace(/\\/g, '\\\\')}')`);
@@ -111,6 +114,24 @@ app.whenReady().then(async () => {
     && loaded.cuts.every((v, i) => Math.abs(v - currentCuts[i]) < 1e-5);
   check('loaded cuts match', okCuts);
   check('loaded deleted match', JSON.stringify(loaded.deleted) === JSON.stringify(currentDel));
+
+  
+  console.log('[4b] relative source path (project in subfolder)');
+  const SUB = path.join(DIR, 'sub');
+  const SUBPROJ = path.join(SUB, 'rt.kc');
+  fs.mkdirSync(SUB, { recursive: true });
+  await js(`window.__app.state.projectPath = '${SUBPROJ.replace(/\\/g, '\\\\')}'; window.__app.saveProject();`);
+  await new Promise((r) => setTimeout(r, 600));
+  const kcText = fs.readFileSync(SUBPROJ, 'utf8');
+  const hasRel = /<src\s+rel="\.\.\/test\.mp4">/.test(kcText);
+  check('project stores relative src (../test.mp4)', hasRel);
+  const loadedSub = await js(`window.keycut.loadProject('${SUBPROJ.replace(/\\/g, '\\\\')}')`);
+  check('loadProject srcRel = ../test.mp4', loadedSub.srcRel === '../test.mp4');
+  check('loadProject cuts preserved', loadedSub.cuts.length === currentCuts.length);
+  const resolved = await js(`window.keycut.resolveProjectSource('${SUBPROJ.replace(/\\/g, '\\\\')}', '../test.mp4')`);
+  check('resolveSource points back to source', !!resolved && path.resolve(resolved.path) === path.resolve(SRC));
+  const resolvedMissing = await js(`window.keycut.resolveProjectSource('${SUBPROJ.replace(/\\/g, '\\\\')}', '../nope.mp4')`);
+  check('resolveSource returns null for missing', resolvedMissing && resolvedMissing.path === null);
 
   
   console.log('[5] export via IPC (cut+concat+cleanup)');

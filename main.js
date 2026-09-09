@@ -50,12 +50,17 @@ function findFileArg(argv) {
   return null;
 }
 
+const MIN_WIN_W = 900;
+const MIN_WIN_H = 560;
+const MAX_PREVIEW_W = 2560;
+const MAX_PREVIEW_H = 1440;
+
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 900,
-    minHeight: 560,
+    width: MIN_WIN_W,
+    height: MIN_WIN_H,
+    minWidth: MIN_WIN_W,
+    minHeight: MIN_WIN_H,
     backgroundColor: '#15171a',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     autoHideMenuBar: true,

@@ -192,7 +192,6 @@ body {
   background: var(--panel-2);
   border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center;
-  font-size: 30px;
   color: var(--accent);
 }
 .placeholder-text { font-size: 15px; }

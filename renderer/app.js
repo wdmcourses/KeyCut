@@ -19,8 +19,13 @@ function toFileUrl(p) {
   return 'file:///' + p.replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/');
 }
 
-const PLAY_SVG = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 5.5 L18.5 12 L8 18.5 Z" fill="currentColor"/></svg>';
+const PLAY_SVG = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M8.5 6 L19 12 L8.5 18 Z" fill="currentColor" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>';
 const PAUSE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="5.5" width="3.6" height="13" rx="1.2" fill="currentColor"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1.2" fill="currentColor"/></svg>';
+const MIN_WIN_W = 900;
+const MIN_WIN_H = 560;
+const MAX_PREVIEW_W = 2560;
+const MAX_PREVIEW_H = 1440;
+const PREVIEW_ASPECT = 16 / 9;
 
 
 const COLORS = {
@@ -1931,7 +1936,8 @@ const app = {
     this.bindVideo();
     this.bindKeys();
 
-    
+    setTimeout(() => this.fitInitialWindow(), 150);
+
     window.keycut.onCloseRequest(() => this.handleCloseRequest());
 
     this.setVideoEnabled(false);
@@ -2279,6 +2285,8 @@ guardTarget(t) {
     const b = $('marker-bubble');
     b.classList.remove('hidden');
     this.syncMarkerBubble();
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
   },
 
   hideMarkerBubble() {
@@ -2420,6 +2428,7 @@ guardTarget(t) {
     });
     this.updateStats();
     this.setVideoEnabled(true);
+    this.fitWindowToVideo(meta.width, meta.height);
   },
 
   
@@ -2485,6 +2494,55 @@ guardTarget(t) {
     $('btn-export').disabled = !on;
     $('btn-save').disabled = !on;
     $('video-placeholder').style.display = on ? 'none' : 'flex';
+  },
+
+  chromeMetrics() {
+    const wrap = $('video-wrap');
+    const rect = wrap.getBoundingClientRect();
+    return {
+      HPad: Math.max(0, window.innerWidth - rect.width),
+      VFixed: Math.max(0, window.innerHeight - rect.height)
+    };
+  },
+
+  async fitInitialWindow() {
+    const { HPad, VFixed } = this.chromeMetrics();
+    const vw = MIN_WIN_W - HPad;
+    const vh = vw / PREVIEW_ASPECT;
+    await window.keycut.setWindowSize(Math.round(vw + HPad), Math.round(vh + VFixed));
+  },
+
+  async fitWindowToVideo(vw, vh) {
+    if (!vw || !vh) return;
+    const videoEl = $('video');
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    let wa = { width: window.screen.width, height: window.screen.height };
+    try { wa = await window.keycut.workArea(); } catch {}
+    await frame();
+    const dpr = window.devicePixelRatio || 1;
+    const targetW = Math.min(vw, MAX_PREVIEW_W) / dpr;
+    const targetH = Math.min(vh, MAX_PREVIEW_H) / dpr;
+    const A = targetW / targetH;
+    const rect = videoEl.getBoundingClientRect();
+    const HChrome = window.innerWidth - rect.width;
+    const VChrome = window.innerHeight - rect.height;
+    const availW = Math.min(targetW, Math.max(1, wa.width - HChrome));
+    const availH = Math.min(targetH, Math.max(1, wa.height - VChrome));
+    let w2 = availW, h2 = availH;
+    if (w2 / h2 > A) w2 = h2 * A; else h2 = w2 / A;
+    const minVW = MIN_WIN_W - HChrome;
+    if (w2 < minVW) { w2 = minVW; h2 = w2 / A; }
+    let W = Math.round(w2 + HChrome);
+    let H = Math.round(h2 + VChrome);
+    for (let i = 0; i < 4; i++) {
+      await window.keycut.setWindowSize(W, H);
+      await frame();
+      const r = videoEl.getBoundingClientRect();
+      const dw = Math.round(w2) - r.width;
+      const dh = Math.round(h2) - r.height;
+      if (Math.abs(dw) < 1 && Math.abs(dh) < 1) break;
+      W += Math.round(dw); H += Math.round(dh);
+    }
   },
 
   
@@ -3180,10 +3238,11 @@ releaseFrameNav() {
             return;
           }
           const v = data.video || {};
-          const durOk = !v.dur || Math.abs(m.duration - v.dur) <= Math.max(2, v.dur * 0.02);
+          const durOk = !v.dur || Math.abs(m.duration - v.dur) <= Math.max(0.1, v.dur * 0.01);
           const whOk = (!v.w || m.width === v.w) && (!v.h || m.height === v.h);
           const fpsOk = !v.fps || !m.fps || Math.abs(m.fps - v.fps) <= 1;
-          if (!durOk || !whOk || !fpsOk) {
+          const sizeOk = !v.size || !m.size || Math.abs(m.size - v.size) <= v.size * 0.01;
+          if (!durOk || !whOk || !fpsOk || !sizeOk) {
             setState('err');
           } else {
             result = { path: p };
@@ -3219,6 +3278,10 @@ releaseFrameNav() {
     }
     const data = res;
     if (!data.src) { this.setStatus('Load failed: missing <src>'); return; }
+    if (data.srcRel) {
+      const r = await window.keycut.resolveProjectSource(filePath, data.srcRel);
+      if (r && r.path) data.src = r.path;
+    }
 
     this.setStatus('Analyzing source video…', true);
     let meta = await window.keycut.probeVideo(data.src);

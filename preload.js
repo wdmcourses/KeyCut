@@ -19,9 +19,12 @@ contextBridge.exposeInMainWorld('keycut', {
   lockSource: (filePath) => ipcRenderer.invoke('source:lock', filePath),
   fileExists: (p) => ipcRenderer.invoke('file:exists', p),
   chooseFile: () => ipcRenderer.invoke('dialog:chooseFile'),
+  workArea: () => ipcRenderer.invoke('screen:workArea'),
+  setWindowSize: (width, height) => ipcRenderer.invoke('win:setSize', { width, height }),
 
   saveProject: (filePath, data) => ipcRenderer.invoke('project:save', { filePath, data }),
   loadProject: (filePath) => ipcRenderer.invoke('project:load', filePath),
+  resolveProjectSource: (projectPath, rel) => ipcRenderer.invoke('project:resolveSource', { projectPath, rel }),
 
   exportStart: (payload) => ipcRenderer.invoke('export:start', payload),
   onExportProgress: (cb) => {
