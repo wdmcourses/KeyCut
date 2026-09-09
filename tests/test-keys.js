@@ -242,26 +242,26 @@ app.whenReady().then(async () => {
   const part = keys[7]; 
   const r1 = await js(`window.__app.model.moveBoundary(1, ${part})`);
   let cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
-  check('partial extend: boundary moves to key', r1 === 1 && near(cuts[1], part));
+  check('partial extend: boundary moves to key', r1.code === 1 && near(cuts[1], part));
   
   const r2 = await js(`window.__app.model.moveBoundary(1, ${k2})`);
   cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   const del = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
-  check('full consume: gray gone, kept merged', r2 === 2 && cuts.length === 3 && near(cuts[1], k2) && del.every((d) => d === false));
+  check('full consume: boundary clamps at gray end, neighbor untouched', r2.code === 1 && cuts.length === 4 && near(cuts[1], k2) && del[1] === true);
   
   await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys();`);
   await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut();`);
   await js(`window.__app.timeline.selectedIndex = 0; window.__app.deleteSegment();`); 
   const r3 = await js(`window.__app.model.moveBoundary(1, ${k1 / 2})`);
   cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
-  check('extend left: boundary moves into gray', r3 === 1 && cuts[1] > 0 && cuts[1] < k1);
+  check('extend left: boundary moves into gray', r3.code === 1 && cuts[1] > 0 && cuts[1] < k1);
   
   await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys();`);
   await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut();`);
   const r4 = await js(`window.__app.model.moveBoundary(1, ${k1 + 0.1})`);
   cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   const del4 = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
-  check('trim right kept: gray gap created, split point stays', r4 === 1 && near(cuts[1], k1) && near(cuts[2], k1 + 0.1) && del4[1] === true);
+  check('trim right kept: gray gap created, split point stays', r4.code === 1 && near(cuts[1], k1) && near(cuts[2], k1 + 0.1) && del4[1] === true);
   
   await js(`window.__app.timeline.selectedIndex = 1; window.__app.deleteSegment();`); 
   const hitK = await js(`(() => {
@@ -277,13 +277,13 @@ app.whenReady().then(async () => {
   const rL = await js(`window.__app.model.moveBoundary(1, ${k1 - 0.2}, 'left')`);
   cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   let del14 = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
-  check('trim left: gray gap left of split', rL === 1 && near(cuts[1], k1 - 0.2) && near(cuts[2], k1) && del14[1] === true);
+  check('trim left: gray gap left of split', rL.code === 1 && near(cuts[1], k1 - 0.2) && near(cuts[2], k1) && del14[1] === true);
   await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys();`);
   await js(`window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut();`);
   const rR = await js(`window.__app.model.moveBoundary(1, ${k1 + 0.2}, 'right')`);
   cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   del14 = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
-  check('trim right: gray gap right of split', rR === 1 && near(cuts[1], k1) && near(cuts[2], k1 + 0.2) && del14[1] === true);
+  check('trim right: gray gap right of split', rR.code === 1 && near(cuts[1], k1) && near(cuts[2], k1 + 0.2) && del14[1] === true);
 
   console.log('[14c] right-trim drag continues, left stays put');
   await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys(); window.__app.timeline.selectedIndex = null;`);
@@ -315,12 +315,12 @@ app.whenReady().then(async () => {
   const shrinkKey = keys[3]; 
   const rShrink = await js(`window.__app.model.moveBoundary(1, ${shrinkKey})`);
   cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
-  check('shrink blue: boundary moves left into blue', rShrink === 1 && cuts[1] < k1 && cuts[1] > 0);
+  check('shrink blue: boundary moves left into blue', rShrink.code === 1 && cuts[1] < k1 && cuts[1] > 0);
   
   const rConsume = await js(`window.__app.model.moveBoundary(1, 0)`);
   cuts = JSON.parse(await js(`JSON.stringify(window.__app.model.cuts)`));
   const dConsume = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
-  check('consume blue fully -> merged gray [0,k2]', rConsume === 2 && cuts.length === 3 && near(cuts[1], k2) && dConsume[0] === true);
+  check('consume blue fully -> boundary clamps at 0, blue region shrinks to zero', rConsume.code === 1 && cuts.length === 4 && near(cuts[1], 0) && dConsume[0] === false);
 
   
   console.log('[16] scrub stops playback');

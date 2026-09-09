@@ -222,48 +222,49 @@ class EditorModel {
 
 
 moveBoundary(k, t, side) {
-  if (k < 1 || k > this.cuts.length - 2) return 0;
+  if (k < 1 || k > this.cuts.length - 2) return { code: 0 };
   const keptBefore = !this.deleted[k - 1];
   const keptAfter = !this.deleted[k];
-  if (!keptBefore && !keptAfter) return 0; 
+  if (!keptBefore && !keptAfter) return { code: 0 };
   const lo = this.cuts[k - 1];
   const hi = this.cuts[k + 1];
   t = Math.min(Math.max(t, lo), hi);
-  if (Math.abs(t - this.cuts[k]) < 1e-9) return 0;
+  if (Math.abs(t - this.cuts[k]) < 1e-9) return { code: 0 };
   if (!this.suppressSnapshot) this.snapshot();
   if (keptBefore && keptAfter) {
     const left = side === k - 1 || side === 'left' || (side == null && t < this.cuts[k]);
     if (left) {
       t = Math.min(t, this.cuts[k]);
-      if (t <= lo + 1e-9 || Math.abs(t - this.cuts[k]) < 1e-9) return 0;
+      if (t <= lo + 1e-9 || Math.abs(t - this.cuts[k]) < 1e-9) return { code: 0 };
       this.cuts.splice(k, 0, t);
       this.deleted.splice(k, 0, true);
       this._runsCache = null;
-      return 1;
+      return { code: 1 };
     }
     t = Math.max(t, this.cuts[k]);
-    if (t >= hi - 1e-9 || Math.abs(t - this.cuts[k]) < 1e-9) return 0;
+    if (t >= hi - 1e-9 || Math.abs(t - this.cuts[k]) < 1e-9) return { code: 0 };
     const dk = this.deleted[k];
     this.cuts.splice(k + 1, 0, t);
     this.deleted[k] = true;
     this.deleted.splice(k + 1, 0, dk);
     this._runsCache = null;
-    return 1;
+    return { code: 1 };
   }
   if (t - lo < 1e-9) {
     
-    this.cuts.splice(k, 1);
-    this.deleted.splice(k - 1, 1);
-    return 2;
+    this.cuts[k] = lo;
+    this._runsCache = null;
+    return { code: 1 };
   }
   if (hi - t < 1e-9) {
     
-    this.cuts.splice(k, 1);
-    this.deleted.splice(k, 1);
-    return 2;
+    this.cuts[k] = hi;
+    this._runsCache = null;
+    return { code: 1 };
   }
   this.cuts[k] = t;
-  return 1;
+  this._runsCache = null;
+  return { code: 1 };
 }
 
   keptRuns() {
@@ -452,6 +453,21 @@ function subtractRuns(runs, start, end) {
 function safeFileName(name) {
   const s = String(name).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim();
   return s || 'part';
+}
+
+function ellipsizeMidFit(s, avail, font) {
+  if (!s) return s;
+  const cv = ellipsizeMidFit._cv || (ellipsizeMidFit._cv = document.createElement('canvas').getContext('2d'));
+  cv.font = font;
+  if (cv.measureText(s).width <= avail) return s;
+  let total = s.length;
+  while (total > 4) {
+    const keep = Math.max(4, Math.floor(total * 0.55));
+    const out = s.slice(0, keep) + '…' + s.slice(-(total - keep - 1));
+    if (cv.measureText(out).width <= avail) return out;
+    total--;
+  }
+  return s.slice(0, 4) + '…' + s.slice(-4);
 }
 
 function arraysEqual(a, b) {
@@ -1017,6 +1033,7 @@ toggleSelectSegment(i) {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    if (app && app.closeFind) app.closeFind();
     const region = this.regionAt(y);
     if (app.cancelStepPause) app.cancelStepPause();
     const bubbleWasOpen = app && app._markerBubbleId;
@@ -1068,12 +1085,14 @@ toggleSelectSegment(i) {
       const near = this.markerAt(x);
       if (near) {
         this.drag = { mode: 'marker', id: near.id, lastX: x, x, y, region };
+        this.canvas.style.cursor = 'grabbing';
         this._markerToggleOff = bubbleWasOpen === near.id;
         if (this.onMarkerDragStart) this.onMarkerDragStart();
         e.preventDefault();
         return;
       }
       this.drag = { mode: 'scrub', lastX: x, moved: false, x, y, region };
+      this.canvas.style.cursor = 'grabbing';
       this.setCursor(snapKey(this.xToTime(x), this.activeKeys || this.keyTimes));
       if (this.onScrub) this.onScrub(this.cursor);
       e.preventDefault();
@@ -1086,6 +1105,13 @@ toggleSelectSegment(i) {
       
       if (app.video && !app.video.paused) app.pause();
       this.drag = { mode: 'resize', k: rk, side: null, lastX: x, x, y, region };
+      this.canvas.style.cursor = 'ew-resize';
+      if (!this.model.deleted[rk - 1] && !this.model.deleted[rk]) {
+        this.drag.activeBlock = null;
+      } else {
+        this.drag.activeBlock = !this.model.deleted[rk - 1] ? rk - 1 : rk;
+        this.activeBlock = this.drag.activeBlock;
+      }
       
       
       this.model.suppressSnapshot = true;
@@ -1144,6 +1170,7 @@ toggleSelectSegment(i) {
     this.drag.lastX = x;
     if (this.drag.mode === 'pan') this.canvas.style.cursor = 'grabbing';
     else if (this.drag.mode === 'resize') this.canvas.style.cursor = 'ew-resize';
+    else if (this.drag.mode === 'marker' || this.drag.mode === 'scrub') this.canvas.style.cursor = 'grabbing';
     this.needsRender = true;
     this.tick();
   }
@@ -1249,16 +1276,26 @@ toggleSelectSegment(i) {
     const snapLo = junction && side === 'left' ? lo : (junction && side === 'right' ? cuts[k] : lo);
     const snapHi = junction && side === 'left' ? cuts[k] : (junction && side === 'right' ? hi : hi);
     const snapped = snapInRange(t, snapLo, snapHi, this.keyTimes);
+    const origBoundary = cuts[k];
     const before = this.captureCornerTargets();
     const res = this.model.moveBoundary(k, snapped, this.drag ? this.drag.side : null);
-    if (res === 0) return;
-    if (res === 1 && junction && side === 'right' && this.drag) {
+    if (res.code === 0) return;
+    if (res.code === 1 && junction && side === 'right' && this.drag) {
       this.drag.k = k + 1;
     }
     this.applyCornerChange(before);
     if (this.onResize) this.onResize();
     this.cursor = snapped;
     app.seek(snapped);
+    if (this.drag && this.drag.mode === 'resize') {
+      if (junction) {
+        if (snapped > origBoundary + 1e-9) this.activeBlock = this.model.segmentOf(origBoundary - 1e-6);
+        else if (snapped < origBoundary - 1e-9) this.activeBlock = this.model.segmentOf(origBoundary + 1e-6);
+      } else {
+        const kk = this.drag.k;
+        this.activeBlock = !this.model.deleted[kk - 1] ? kk - 1 : kk;
+      }
+    }
     
     if (this.selected && this.selected[1] >= this.model.cuts.length - 1) {
       this.selected = null;
@@ -1270,7 +1307,6 @@ toggleSelectSegment(i) {
     }
     this.needsRender = true;
     this.tick();
-    if (res === 2) this.drag = null; 
   }
 
   onWheel(e) {
@@ -1860,6 +1896,32 @@ const app = {
       this.hideMarkerBubble();
       this.deleteActiveMarker(id);
     });
+    $('find-input').addEventListener('keydown', (e) => {
+      if (e.code === 'Enter') {
+        e.preventDefault();
+        const dir = e.shiftKey ? -1 : 1;
+        if (!this._findResults || !this._findResults.length) this.findLive();
+        else if (this._findDone) this.findNav(dir);
+        else this.findDo();
+      } else if (e.code === 'Escape') {
+        e.preventDefault();
+        const hm = $('help-modal');
+        if (hm && !hm.classList.contains('hidden')) { hm.classList.add('hidden'); return; }
+        this.closeFind();
+      }
+    });
+    $('find-input').addEventListener('input', () => this.findLive());
+    $('find-next').addEventListener('click', () => this.findNav(1));
+    $('find-prev').addEventListener('click', () => this.findNav(-1));
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest('#find-bar') || t.closest('#marker-bubble') || t.closest('#locate-modal') || t.closest('#export-modal') || t.closest('#help-modal')) return;
+      if (t.closest('button')) {
+        this.closeFind();
+        this.hideMarkerBubble();
+      }
+    });
     this.hideMarkerBubble();
     this.syncExportButton();
 
@@ -2033,6 +2095,7 @@ const app = {
     
     const t = this.video.currentTime;
     if (Math.abs(t - this.state.cursor) > CARET_UPDATE_MS) {
+      this.onPlayheadMoved();
       this.state.cursor = t;
       this.timeline.cursor = t;
       this.timeline.activeBlock = null;
@@ -2128,6 +2191,14 @@ guardTarget(t) {
   bindKeys() {
     window.addEventListener('keydown', (e) => {
       if (e.target && e.target.tagName === 'INPUT') return;
+      if (!$('help-modal').classList.contains('hidden')) {
+        if (e.code === 'Escape') {
+          e.preventDefault();
+          this.cancelStepPause();
+          $('help-modal').classList.add('hidden');
+        }
+        return;
+      }
       this.timeline.setCtrlHeld(e.ctrlKey || e.metaKey);
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.code === 'KeyO') { e.preventDefault(); this.openFile(); return; }
@@ -2136,6 +2207,7 @@ guardTarget(t) {
       if (mod && e.code === 'KeyE') { e.preventDefault(); this.export(); return; }
       if (mod && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
       if (mod && e.code === 'KeyY') { e.preventDefault(); this.redo(); return; }
+      if (mod && !e.shiftKey && e.code === 'KeyF') { e.preventDefault(); this.toggleFind(); return; }
       if (mod && e.shiftKey && e.code === 'KeyF') { e.preventDefault(); this.navPause(() => this.endNav()); return; }
       if (e.code === 'Space') { e.preventDefault(); this.cancelStepPause(); this.togglePlay(); return; }
       if (e.code === 'KeyM') { e.preventDefault(); this.timeline.addMarkerAt(this.state.cursor); return; }
@@ -2172,9 +2244,11 @@ guardTarget(t) {
       }
       if (e.code === 'Escape') {
         this.cancelStepPause();
-        if (this._markerBubbleId != null) { this.hideMarkerBubble(); return; }
         const hm = $('help-modal');
         if (hm && !hm.classList.contains('hidden')) { hm.classList.add('hidden'); return; }
+        if (this._locateResolve) { this._locateResolve(null); return; }
+        if (!$('find-bar').classList.contains('hidden')) { this.closeFind(); return; }
+        if (this._markerBubbleId != null) { this.hideMarkerBubble(); return; }
         this.pause();
       }
     });
@@ -2219,9 +2293,24 @@ guardTarget(t) {
     if (b.classList.contains('hidden') || this._markerBubbleId == null) return;
     const m = this.timeline.markers.find((x) => x.id === this._markerBubbleId);
     if (!m) { this.hideMarkerBubble(); return; }
-    const canvas = $('timeline');
-    const x = canvas.offsetLeft + this.timeline.timeToX(m.t);
-    b.style.left = x + 'px';
+    const wrap = $('timeline-wrap');
+    const x = $('timeline').offsetLeft + this.timeline.timeToX(m.t);
+    const ww = wrap.clientWidth;
+    const bw = b.offsetWidth;
+    const margin = 6;
+    const r = 8;
+    const arrow = $('marker-bubble-arrow');
+    b.style.transform = 'none';
+    if (x - bw / 2 >= margin && ww - (x + bw / 2) >= margin) {
+      b.style.left = (x - bw / 2) + 'px';
+      arrow.style.left = '50%';
+    } else if (x - bw / 2 < margin) {
+      b.style.left = margin + 'px';
+      arrow.style.left = Math.max(r, Math.min(bw - r, x - margin)) + 'px';
+    } else {
+      b.style.left = Math.max(margin, ww - bw - margin) + 'px';
+      arrow.style.left = Math.max(r, Math.min(bw - r, x - (ww - bw - margin))) + 'px';
+    }
   },
 
   syncExportButton() {
@@ -2268,7 +2357,13 @@ guardTarget(t) {
   },
 
   toggleHelp() {
-    $('help-modal').classList.toggle('hidden');
+    const hm = $('help-modal');
+    const willOpen = hm.classList.contains('hidden');
+    hm.classList.toggle('hidden');
+    if (willOpen) {
+      this.closeFind();
+      this.hideMarkerBubble();
+    }
   },
 
   setProgress(p) {
@@ -2519,7 +2614,12 @@ frameDeleted(t) {
   
 
 
+  onPlayheadMoved() {
+    if (this._markerBubbleId != null) this.hideMarkerBubble();
+  },
+
   seek(t) {
+    this.onPlayheadMoved();
     if (this.timeline) this.timeline.activeBlock = null;
     this.state.cursor = t;
     if (this.video.readyState > 0) {
@@ -2752,6 +2852,111 @@ frameDeleted(t) {
     this.ensureCursorVisible();
   },
 
+  async toggleFind() {
+    if (!$('help-modal').classList.contains('hidden')) return;
+    if (!this.state.source) {
+      this.setStatus('Open a project to search markers');
+      return;
+    }
+    const exists = await window.keycut.fileExists(this.state.source);
+    if (!exists) {
+      this.setStatus('Source file is missing — open the video first');
+      return;
+    }
+    if ($('find-bar').classList.contains('hidden')) this.openFind();
+    else this.closeFind();
+  },
+
+  openFind() {
+    this._findResults = [];
+    this._findIndex = -1;
+    this._findDone = false;
+    $('find-count').textContent = '0 / 0';
+    $('find-next').disabled = true;
+    $('find-prev').disabled = true;
+    $('find-bar').classList.remove('hidden');
+    $('find-input').focus();
+    $('find-input').select();
+  },
+
+  closeFind() {
+    $('find-bar').classList.add('hidden');
+    $('find-input').value = '';
+    this._findResults = [];
+    this._findIndex = -1;
+    this._findDone = false;
+  },
+
+  findLive() {
+    const raw = $('find-input').value.trim();
+    const q = raw.toLowerCase();
+    const markers = this.timeline && this.timeline.markers ? this.timeline.markers : [];
+    if (!q || !markers.length) {
+      this._findResults = [];
+      this._findIndex = -1;
+      this._findDone = false;
+      $('find-count').textContent = '0 / 0';
+      $('find-next').disabled = true;
+      $('find-prev').disabled = true;
+      return;
+    }
+    this._findResults = markers.filter((m) => (m.name || '').toLowerCase().includes(q)).sort((a, b) => a.t - b.t);
+    this._findIndex = this._findResults.length ? 0 : -1;
+    this._findDone = false;
+    $('find-count').textContent = this._findResults.length ? '1 / ' + this._findResults.length : '0 / 0';
+    $('find-next').disabled = this._findResults.length < 2;
+    $('find-prev').disabled = this._findResults.length < 2;
+    if (!this._findResults.length) this.setStatus('No markers match "' + raw + '"');
+  },
+
+  findDo() {
+    if (!this._findResults || !this._findResults.length) { this.findLive(); return; }
+    this._findDone = true;
+    this._findIndex = 0;
+    this.updateFindButtons();
+    this.navigateToMarker(this._findResults[0]);
+  },
+
+  findNav(dir) {
+    const n = this._findResults.length;
+    if (!n) return;
+    this._findDone = true;
+    this._findIndex = (this._findIndex + dir + n) % n;
+    this.updateFindButtons();
+    this.navigateToMarker(this._findResults[this._findIndex]);
+  },
+
+  updateFindButtons() {
+    const n = this._findResults.length;
+    $('find-next').disabled = n < 2;
+    $('find-prev').disabled = n < 2;
+    $('find-count').textContent = n ? (this._findIndex + 1) + ' / ' + n : '0 / 0';
+  },
+
+  navigateToMarker(m) {
+    if (!m) return;
+    this.seekToMarker(m.t);
+    this.centerMarker(m);
+    this.hideMarkerBubble();
+    this.markerBubble(m);
+    this.syncMarkerBubble();
+  },
+
+  centerMarker(m) {
+    const tl = this.timeline;
+    if (!tl || !tl.w || !tl.pxPerSec) return;
+    const viewW = tl.w / tl.pxPerSec;
+    const d = this.state.duration || 0;
+    let vs;
+    if (m.t <= viewW * 0.25) vs = 0;
+    else if (m.t >= d - viewW * 0.25) vs = d - viewW;
+    else vs = m.t - viewW / 2;
+    tl.viewStart = vs;
+    tl.clampView();
+    tl.needsRender = true;
+    tl.tick();
+  },
+
   
   prevBlock() {
     const cuts = this.model.cuts;
@@ -2915,6 +3120,95 @@ releaseFrameNav() {
     }
   },
 
+  locateSource(data) {
+    return new Promise((resolve) => {
+      const modal = $('locate-modal');
+      const nameEl = $('locate-name');
+      const pathEl = $('locate-path');
+      const spinner = $('locate-spinner');
+      const openBtn = $('locate-open');
+      const warn = $('locate-warn');
+      const chooseBtn = $('locate-choose');
+      let result = null;
+      let verifying = false;
+      nameEl.textContent = data.src.split(/[\\/]/).pop();
+      pathEl.textContent = '';
+      warn.classList.add('hidden');
+      const setState = (s) => {
+        if (s === 'checking') {
+          spinner.classList.remove('hidden');
+          spinner.className = 'locate-spinner checking';
+          spinner.innerHTML = '';
+        } else if (s === 'ok') {
+          spinner.classList.remove('hidden');
+          spinner.className = 'locate-spinner ok';
+          spinner.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5 10-10"/></svg>';
+        } else if (s === 'err') {
+          spinner.classList.remove('hidden');
+          spinner.className = 'locate-spinner err';
+          spinner.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#e5484d"/><rect x="7" y="10.5" width="10" height="3" rx="1.5" fill="#fff"/></svg>';
+        } else {
+          spinner.classList.add('hidden');
+        }
+        openBtn.classList.toggle('ok', s === 'ok' || s === 'warn');
+        openBtn.classList.toggle('err', s === 'err');
+        openBtn.disabled = s !== 'ok' && s !== 'warn';
+        warn.classList.toggle('hidden', s !== 'err');
+      };
+      const finish = (r) => {
+        this._locateResolve = null;
+        modal.classList.add('hidden');
+        resolve(r);
+      };
+      this._locateResolve = finish;
+      const doChoose = async () => {
+        if (verifying) return;
+        const p = await window.keycut.chooseFile();
+        if (!p) return;
+        const btn = $('locate-choose');
+        $('locate-choose-label').textContent = ellipsizeMidFit(p.split(/[\\/]/).pop(), btn.clientWidth - 44, getComputedStyle(btn).font);
+        pathEl.textContent = p;
+        verifying = true;
+        chooseBtn.disabled = true;
+        setState('checking');
+        try {
+          const m = await window.keycut.probeQuick(p);
+          if (!m || m.error || m.duration == null || m.width == null || m.height == null) {
+            setState('err');
+            verifying = false;
+            chooseBtn.disabled = false;
+            return;
+          }
+          const v = data.video || {};
+          const durOk = !v.dur || Math.abs(m.duration - v.dur) <= Math.max(2, v.dur * 0.02);
+          const whOk = (!v.w || m.width === v.w) && (!v.h || m.height === v.h);
+          const fpsOk = !v.fps || !m.fps || Math.abs(m.fps - v.fps) <= 1;
+          if (!durOk || !whOk || !fpsOk) {
+            setState('err');
+          } else {
+            result = { path: p };
+            setState('ok');
+          }
+        } catch {
+          setState('err');
+        }
+        verifying = false;
+        chooseBtn.disabled = false;
+      };
+      chooseBtn.onclick = doChoose;
+      openBtn.onclick = () => finish(result);
+      modal.addEventListener('click', function onOverlay(e) {
+        if (e.target === modal) {
+          modal.removeEventListener('click', onOverlay);
+          finish(null);
+        }
+      });
+      if (!$('help-modal').classList.contains('hidden')) $('help-modal').classList.add('hidden');
+      setState('idle');
+      modal.classList.remove('hidden');
+    });
+  },
+
   async openProjectFromPath(filePath) {
     this.setStatus('Loading project…', true);
     const res = await window.keycut.loadProject(filePath);
@@ -2927,11 +3221,25 @@ releaseFrameNav() {
     if (!data.src) { this.setStatus('Load failed: missing <src>'); return; }
 
     this.setStatus('Analyzing source video…', true);
-    const meta = await window.keycut.probeVideo(data.src);
+    let meta = await window.keycut.probeVideo(data.src);
     this.setStatus('', false);
     if (!meta || meta.error) {
-      this.setStatus('Source video missing: ' + data.src + '. Please open the original video file.');
-      return;
+      const exists = await window.keycut.fileExists(data.src);
+      if (!exists) {
+        const located = await this.locateSource(data);
+        if (!located) return;
+        data.src = located.path;
+        this.setStatus('Analyzing source video…', true);
+        meta = await window.keycut.probeVideo(data.src);
+        this.setStatus('', false);
+        if (!meta || meta.error) {
+          this.setStatus('Source video missing: ' + data.src + '. Please open the original video file.');
+          return;
+        }
+      } else {
+        this.setStatus('Source video missing: ' + data.src + '. Please open the original video file.');
+        return;
+      }
     }
 
     this.state.source = data.src;

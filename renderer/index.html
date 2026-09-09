@@ -119,10 +119,10 @@
           <div class="shortcut-group-title">Playback &amp; Navigation</div>
           <div class="shortcut-row"><span class="desc">Previous / Next keyframe</span><span class="keys"><kbd>S</kbd> / <kbd>F</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Previous / Next block</span><span class="keys"><kbd>Shift</kbd>+<kbd>S</kbd> / <kbd>Shift</kbd>+<kbd>F</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Previous / Next marker (or start / end)</span><span class="keys"><kbd>[</kbd> / <kbd>]</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Start / End of project</span><span class="keys"><kbd>Home</kbd> / <kbd>End</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Previous marker / start</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Next marker / end</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Find marker · next / prev</span><span class="keys"><span class="kcombo"><kbd>Ctrl</kbd>+<kbd>F</kbd> · <kbd>Enter</kbd></span><span class="kcombo"><kbd>Shift</kbd>+<kbd>Enter</kbd></span></span></div>
+          <div class="shortcut-row"><span class="desc">Start / End of project</span><span class="keys"><kbd>Home</kbd> / <kbd>End</kbd></span></div>
         </div>
         <div class="shortcut-group g-edit">
           <div class="shortcut-group-title">Editing</div>
@@ -137,6 +137,26 @@
         </div>
       </div>
       <button id="help-modal-close">Close</button>
+    </div>
+  </div>
+
+  <div id="find-bar" class="hidden">
+    <input id="find-input" type="text" placeholder="Find marker…" spellcheck="false" />
+    <button id="find-prev" type="button" disabled>&#8592;</button>
+    <button id="find-next" type="button" disabled>&#8594;</button>
+    <span id="find-count" class="find-count"></span>
+  </div>
+
+  <div id="locate-modal" class="hidden">
+    <div id="locate-modal-card">
+      <div id="locate-modal-title">Source file not found</div>
+      <div id="locate-modal-msg">The project references <b id="locate-name"></b>, which is missing. Please locate the original file.</div>
+      <button id="locate-choose" type="button"><span id="locate-choose-label">Choose file</span><span id="locate-spinner" class="hidden"></span></button>
+      <div id="locate-path" class="locate-path"></div>
+      <div class="locate-actions">
+        <span id="locate-warn" class="hidden">This is not the right file</span>
+        <button id="locate-open" type="button" disabled>Open</button>
+      </div>
     </div>
   </div>
 

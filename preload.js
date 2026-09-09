@@ -14,8 +14,11 @@ contextBridge.exposeInMainWorld('keycut', {
   getFilePath: (file) => webUtils.getPathForFile(file),
 
   probeVideo: (filePath) => ipcRenderer.invoke('probe:video', filePath),
+  probeQuick: (p) => ipcRenderer.invoke('probe:quick', p),
   ffmpegPath: () => ipcRenderer.invoke('ffmpegPath'),
   lockSource: (filePath) => ipcRenderer.invoke('source:lock', filePath),
+  fileExists: (p) => ipcRenderer.invoke('file:exists', p),
+  chooseFile: () => ipcRenderer.invoke('dialog:chooseFile'),
 
   saveProject: (filePath, data) => ipcRenderer.invoke('project:save', { filePath, data }),
   loadProject: (filePath) => ipcRenderer.invoke('project:load', filePath),

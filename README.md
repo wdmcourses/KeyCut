@@ -34,7 +34,6 @@ output keeps the original quality and the whole operation is fast.</p>
 | Space | Play / pause |
 | S / F | Previous / next keyframe |
 | Shift+S / Shift+F | Previous / next block |
-| [ / ] | Previous / next marker (or start / end) |
 | Home / End | Start / end of project |
 | M | Add marker at the caret |
 | C | Cut at the caret |
@@ -45,6 +44,7 @@ output keeps the original quality and the whole operation is fast.</p>
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo / Redo |
 | Ctrl+O / Ctrl+S | Open / save project |
 | Ctrl+Shift+S / Ctrl+Shift+F | Previous / next marker (or start / end) |
+| Ctrl+F · Enter / Shift+Enter | Find marker · next / prev |
 | Ctrl+E | Export |
 
 ## Getting started
