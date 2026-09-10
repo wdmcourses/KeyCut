@@ -4,6 +4,15 @@
 
 const $ = (id) => document.getElementById(id);
 
+const KEYFRAME_ALPHA_BRIGHT = 0.3;
+const KEYFRAME_DIM_COEFF = 0.45;
+const KEYFRAME_GRAY_COEFF = 0.57;
+const WAVEFORM_COEFF = 2;
+const WAVEFORM_OFF_DIM = 0.5;
+const SEG_KEPT_ALPHA = 0.45;
+const SEG_OFF_ALPHA = 0.1;
+const SEG_DELETED_ALPHA = 0.6;
+
 function pad(n, w = 2) { return String(n).padStart(w, '0'); }
 
 function fmtTime(t, ms = false) {
@@ -37,24 +46,23 @@ const COLORS = {
   segDeleted: '#22252b',
   segDeletedFrame: 'rgba(172,182,196,0.3)',
   segBoundary: 'rgba(255,255,255,0.55)',
-  keyframeRgb: '255,209,102',
-  keyframeAlphaBright: 0.7,
-  keyframeAlphaDim: 0.32,
+  keyframeRgb: '255,255,255',
+  keyframeAlphaBright: KEYFRAME_ALPHA_BRIGHT,
+  keyframeAlphaDim: KEYFRAME_ALPHA_BRIGHT * KEYFRAME_DIM_COEFF,
   
-  
-  keyframeGrayRgb: '94,102,112',
-  keyframeGrayAlphaBright: 0.4,
-  keyframeGrayAlphaDim: 0.14,
+  keyframeGrayRgb: '255,255,255',
+  keyframeGrayAlphaBright: KEYFRAME_ALPHA_BRIGHT * KEYFRAME_GRAY_COEFF,
+  keyframeGrayAlphaDim: KEYFRAME_ALPHA_BRIGHT * KEYFRAME_DIM_COEFF * KEYFRAME_GRAY_COEFF,
   selectionKept: '#ffffff',
   selectionGray: '#d8dee6',
   resizeHandle: 'rgba(255,255,255,0.95)',
   activeSeg: 'rgba(255,255,255,0.95)',
   activeSegGlow: 'rgba(255,255,255,0.5)',
-  hatch: 'rgba(0,0,0,0.10)',
+  hatch: 'rgba(215,224,232,0.12)',
   rulerBg: '#15171b',
-  rulerTick: '#4a5058',
-  rulerMinor: '#33383f',
-  rulerLabel: '#6b7280',
+  rulerTick: '#9aa6b5',
+  rulerMinor: 'rgba(154,166,181,0.5)',
+  rulerLabel: '#9aa6b5',
   playhead: '#ffffff',
   separator: '#24282e'
 };
@@ -301,9 +309,9 @@ moveBoundary(k, t, side) {
 
 
 
-const MARK = { y: 0, h: 14 };
-const SEG = { y: 16, h: 50 };
-const RULER = { y: 68, h: 18 };
+const MARK = { y: 0, h: 18 };
+const SEG = { y: 18, h: 64 };
+const RULER = { y: 0, h: 18 };
 
 
 
@@ -342,7 +350,7 @@ const SCROLLBAR = {
   thumbMin: 80,
   caret: 12,
   tol: 4,
-  track: 20,
+  track: 19,
   inset: 3
 };
 const RESIZE_TOL_PX = 7;
@@ -510,6 +518,13 @@ function snapKey(t, keys) {
   const prev = idx > 0 ? keys[idx - 1] : keys[0];
   const next = keys[idx];
   return (next - t <= t - prev) ? next : prev;
+}
+
+function endSnap(t, end, keys, fps) {
+  const c = Math.max(0, Math.min(t, end));
+  if (!end) return keys && keys.length ? snapKey(c, keys) : c;
+  const tol = fps > 0 ? Math.max(1e-3, 1 / fps) : 1e-3;
+  return (c >= end - tol) ? end : (keys && keys.length ? snapKey(c, keys) : c);
 }
 
 function prevKey(t, keys) {
@@ -884,12 +899,13 @@ class Timeline {
   regionAt(y) {
     if (y >= MARK.y && y < MARK.y + MARK.h) return 'mark';
     if (y >= SEG.y && y < SEG.y + SEG.h) return 'seg';
-    if (y >= RULER.y && y < RULER.y + RULER.h) return 'ruler';
     return null;
   }
 
   setCursor(t, fromVideo = false) {
-    t = Math.min(Math.max(0, snapKey(t, this.activeKeys || this.keyTimes)), this.duration || 0);
+    const end = this.duration || 0;
+    t = endSnap(t, end, this.activeKeys || this.keyTimes, app && app.state ? app.state.fps : 0);
+    t = Math.min(Math.max(0, t), end);
     this.cursor = t;
     if (!fromVideo) app.seek(t);
     this.needsRender = true;
@@ -979,7 +995,9 @@ toggleSelectSegment(i) {
 
   addMarkerAt(t) {
     if (!this.model) return null;
-    const mk = { id: ++this._markerSeq, t: snapKey(t, this.keyTimes), name: 'part_' + (this.markers.length + 1), color: pickMarkerColor(this.markers.map((m) => m.color)) };
+    const end = this.duration || 0;
+    const mt = endSnap(t, end, this.keyTimes, app && app.state ? app.state.fps : 0);
+    const mk = { id: ++this._markerSeq, t: mt, name: 'part_' + (this.markers.length + 1), color: pickMarkerColor(this.markers.map((m) => m.color)) };
     mk.t = this.clampMarkerTime(mk.id, mk.t);
     const existing = this.markers.find((m) => Math.abs(m.t - mk.t) < 1e-6);
     if (existing) {
@@ -1012,8 +1030,10 @@ toggleSelectSegment(i) {
 
   clampMarkerTime(id, t) {
     const keys = this.keyTimes || [];
-    if (!keys.length) return t;
-    let final = snapKey(t, keys);
+    const end = this.duration || 0;
+    const fps = app && app.state ? app.state.fps : 0;
+    if (!keys.length) return endSnap(t, end, null, fps);
+    let final = endSnap(t, end, keys, fps);
     const m = this.markers.find((x) => x.id === id);
     const orig = m ? m.t : final;
     const others = this.markers.filter((x) => x.id !== id).slice().sort((a, b) => a.t - b.t);
@@ -1050,39 +1070,8 @@ toggleSelectSegment(i) {
     
     if (region === 'mark') {
       if (e.button === 1) {
-        const nm = this.markerAt(x);
-        if (nm) {
-          this.markers = this.markers.filter((m) => m.id !== nm.id);
-          this.needsRender = true;
-          this.tick();
-          this.model.snapshot();
-          this._lastBubbleId = null;
-          if (this.onMarkersChange) this.onMarkersChange();
-          if (this.onMarkerBubbleHide) this.onMarkerBubbleHide();
-          e.preventDefault();
-          return;
-        }
-        const mkT = this.clampMarkerTime(null, this.markerTimeAt(x));
-        const existing = this.markers.find((m) => Math.abs(m.t - mkT) < 1e-6);
-        if (existing) {
-          this.markers = this.markers.filter((m) => m.id !== existing.id);
-          this.needsRender = true;
-          this.tick();
-          this.model.snapshot();
-          this._lastBubbleId = null;
-          if (this.onMarkersChange) this.onMarkersChange();
-          if (this.onMarkerBubbleHide) this.onMarkerBubbleHide();
-          e.preventDefault();
-          return;
-        }
-        const mk = { id: ++this._markerSeq, t: mkT, name: 'part_' + (this.markers.length + 1), color: pickMarkerColor(this.markers.map((m) => m.color)) };
-        this.markers.push(mk);
-        this.needsRender = true;
-        this.tick();
-        this.model.snapshot();
-        this._lastBubbleId = mk.id;
-        if (this.onMarkerEdit) this.onMarkerEdit(mk);
-        if (this.onMarkersChange) this.onMarkersChange();
+        this.drag = { mode: 'pan', lastX: x, moved: false, x, y, region, pendingMiddleMarker: true };
+        this.canvas.style.cursor = 'grabbing';
         e.preventDefault();
         return;
       }
@@ -1098,7 +1087,7 @@ toggleSelectSegment(i) {
       }
       this.drag = { mode: 'scrub', lastX: x, moved: false, x, y, region };
       this.canvas.style.cursor = 'grabbing';
-      this.setCursor(snapKey(this.xToTime(x), this.activeKeys || this.keyTimes));
+      this.setCursor(this.xToTime(x));
       if (this.onScrub) this.onScrub(this.cursor);
       e.preventDefault();
       return;
@@ -1192,11 +1181,15 @@ toggleSelectSegment(i) {
     if (this.drag && this.drag.mode === 'scrub' && this.onScrubEnd) this.onScrubEnd();
     const wasMarker = this.drag && this.drag.mode === 'marker';
     const markerId = wasMarker ? this.drag.id : null;
+    const pendingMid = this.drag && this.drag.pendingMiddleMarker;
+    const midX = this.drag ? this.drag.x : null;
     const moved = this.drag ? this.drag.moved : false;
     this.endResizeDrag();
     this.drag = null;
     this.canvas.style.cursor = 'default';
-    if (wasMarker && markerId != null) {
+    if (pendingMid) {
+      if (!moved && midX != null) this.toggleMarkerAtX(midX);
+    } else if (wasMarker && markerId != null) {
       if (moved) {
         this._lastBubbleId = null;
         if (this.model) this.model.snapshot();
@@ -1213,6 +1206,40 @@ toggleSelectSegment(i) {
         }
       }
     }
+  }
+
+  toggleMarkerAtX(x) {
+    const nm = this.markerAt(x);
+    if (nm) {
+      this.markers = this.markers.filter((m) => m.id !== nm.id);
+      this.needsRender = true;
+      this.tick();
+      this.model.snapshot();
+      this._lastBubbleId = null;
+      if (this.onMarkersChange) this.onMarkersChange();
+      if (this.onMarkerBubbleHide) this.onMarkerBubbleHide();
+      return;
+    }
+    const mkT = this.clampMarkerTime(null, this.markerTimeAt(x));
+    const existing = this.markers.find((m) => Math.abs(m.t - mkT) < 1e-6);
+    if (existing) {
+      this.markers = this.markers.filter((m) => m.id !== existing.id);
+      this.needsRender = true;
+      this.tick();
+      this.model.snapshot();
+      this._lastBubbleId = null;
+      if (this.onMarkersChange) this.onMarkersChange();
+      if (this.onMarkerBubbleHide) this.onMarkerBubbleHide();
+      return;
+    }
+    const mk = { id: ++this._markerSeq, t: mkT, name: 'part_' + (this.markers.length + 1), color: pickMarkerColor(this.markers.map((m) => m.color)) };
+    this.markers.push(mk);
+    this.needsRender = true;
+    this.tick();
+    this.model.snapshot();
+    this._lastBubbleId = mk.id;
+    if (this.onMarkerEdit) this.onMarkerEdit(mk);
+    if (this.onMarkersChange) this.onMarkersChange();
   }
 
   
@@ -1341,6 +1368,7 @@ toggleSelectSegment(i) {
   
 
   tick() {
+    if (app && app.timelineViewChanged) app.timelineViewChanged();
     if (this.needsRender) {
       this.needsRender = false;
       this.render();
@@ -1367,20 +1395,23 @@ toggleSelectSegment(i) {
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, w, h);
 
+    this.renderWaveform(ctx, viewEnd);
     this.renderSegments(ctx, viewEnd);
     this.renderKeyframes(ctx, viewEnd);
-    this.renderMarkers(ctx);
     this.renderSelection(ctx);
     this.renderActiveSegment(ctx, viewEnd);
     this.renderResizeHandles(ctx, viewEnd);
+    this.renderRulerBg(ctx);
+    this.renderMarkerRanges(ctx);
     this.renderRuler(ctx);
-    
+    this.renderMarkerGlyphs(ctx);
+
     ctx.fillStyle = COLORS.separator;
-    ctx.fillRect(0, RULER.y - 1, w, 1);
+    ctx.fillRect(0, MARK.y + MARK.h, w, 1);
     this.renderPlayhead(ctx);
   }
 
-  renderMarkers(ctx) {
+  renderMarkerRanges(ctx) {
     if (!this.markers || !this.markers.length) return;
     const sorted = this.markers.slice().sort((a, b) => a.t - b.t);
     let prev = 0;
@@ -1388,23 +1419,31 @@ toggleSelectSegment(i) {
       const xa = this.timeToX(prev);
       const xb = this.timeToX(m.t);
       if (xb > -12 && xa < this.w + 12) {
-        ctx.fillStyle = m.off ? 'rgba(229,72,77,0.35)' : 'rgba(63,185,80,0.22)';
+        ctx.save();
+        ctx.globalAlpha = m.off ? SEG_OFF_ALPHA : SEG_KEPT_ALPHA;
+        ctx.fillStyle = this.segGradient(lightenHex(m.color, 1.2), m.color, MARK.y, MARK.h);
         ctx.fillRect(xa, MARK.y, Math.max(0, xb - xa), MARK.h);
+        ctx.restore();
       }
       prev = m.t;
     }
+  }
+
+  renderMarkerGlyphs(ctx) {
+    if (!this.markers || !this.markers.length) return;
+    const sorted = this.markers.slice().sort((a, b) => a.t - b.t);
     for (const m of sorted) {
       const x = this.timeToX(m.t);
       if (x < -12 || x > this.w + 12) continue;
-      const img = this.glyphFor(m.color);
+      const img = this.glyphFor('#ffffff');
       if (img && img.complete) {
         ctx.save();
         ctx.filter = 'brightness(1.35)';
-        ctx.drawImage(img, x - 7, MARK.y, 14, 14);
+        ctx.drawImage(img, x - 8, MARK.y + 1, 14, 14);
         ctx.restore();
       }
       ctx.fillStyle = m.off ? 'rgba(170,180,190,0.85)' : 'rgba(255,255,255,0.9)';
-      ctx.fillRect(x - 0.5, MARK.y + MARK.h + 2, 1, SEG.h);
+      ctx.fillRect(x - 0.5, MARK.y + MARK.h + 2, 1, Math.max(0, SEG.y + SEG.h - MARK.y - MARK.h - 2));
     }
   }
 
@@ -1465,7 +1504,7 @@ toggleSelectSegment(i) {
       ctx.save();
       ctx.fillStyle = gray ? 'rgba(216,222,230,0.14)' : 'rgba(255,255,255,0.20)';
       ctx.beginPath();
-      ctx.roundRect(x0, top, Math.max(0, x1 - x0), bottom - top, SEG_RADIUS);
+      ctx.roundRect(x0, top, Math.max(0, x1 - x0), bottom - top, [0, 0, SEG_RADIUS, SEG_RADIUS]);
       ctx.fill();
       ctx.strokeStyle = gray ? COLORS.selectionGray : COLORS.selectionKept;
       ctx.lineWidth = 2;
@@ -1517,7 +1556,7 @@ toggleSelectSegment(i) {
     ctx.shadowColor = COLORS.activeSegGlow;
     ctx.shadowBlur = 12;
     ctx.beginPath();
-    ctx.roundRect(x0, top, x1 - x0, bottom - top, [rl, rr, rr, rl]);
+    ctx.roundRect(x0, top, x1 - x0, bottom - top, [0, 0, rr, rl]);
     ctx.stroke();
     ctx.restore();
   }
@@ -1547,22 +1586,41 @@ toggleSelectSegment(i) {
       const deleted = model.deleted[i];
       const rl = this.radiusAt(cuts[i]);
       const rr = this.radiusAt(cuts[i + 1]);
-      const radii = [rl, rr, rr, rl];
+      const radii = [0, 0, rr, rl];
       ctx.beginPath();
       ctx.roundRect(x0, y, x1 - x0, h, radii);
       if (deleted) {
+        ctx.save();
+        ctx.globalAlpha = SEG_DELETED_ALPHA;
         ctx.fillStyle = COLORS.segDeleted;
         ctx.fill();
         if (!this.hatch) this.makeHatch();
         ctx.fillStyle = this.hatch;
         ctx.fill();
-        
+        ctx.restore();
         
         ctx.strokeStyle = COLORS.segDeletedFrame;
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        if (x1 - x0 >= 28) {
+          const cx = (x0 + x1) / 2;
+          const cy = y + h / 2;
+          const s = 6;
+          ctx.save();
+          ctx.strokeStyle = 'rgba(210,220,230,0.7)';
+          ctx.lineWidth = 1.5;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(cx - s, cy - s);
+          ctx.lineTo(cx + s, cy + s);
+          ctx.moveTo(cx + s, cy - s);
+          ctx.lineTo(cx - s, cy + s);
+          ctx.stroke();
+          ctx.restore();
+        }
       } else {
         ctx.save();
+        ctx.globalAlpha = SEG_KEPT_ALPHA;
         ctx.beginPath();
         ctx.roundRect(x0, y, x1 - x0, h, radii);
         ctx.clip();
@@ -1578,9 +1636,9 @@ toggleSelectSegment(i) {
           ctx.fillStyle = reg
             ? this.segGradient(lightenHex(reg, 1.2), reg, y, h)
             : this.segGradient(COLORS.segKeptFrom, COLORS.segKeptTo, y, h);
-          if (m && m.off) ctx.globalAlpha = 0.25;
+          if (m && m.off) ctx.globalAlpha = SEG_OFF_ALPHA;
           ctx.fillRect(xa, y, xb - xa, h);
-          if (m && m.off) ctx.globalAlpha = 1;
+          if (m && m.off) ctx.globalAlpha = SEG_KEPT_ALPHA;
         }
         ctx.restore();
       }
@@ -1602,9 +1660,6 @@ toggleSelectSegment(i) {
     const n = runs.length;
     ctx.fillStyle = COLORS.segDeleted;
     ctx.fillRect(0, y, this.w, h);
-    
-    
-    
     let cs = -1, ce = -1;
     const flush = () => {
       const g = ctx.createLinearGradient(0, y, 0, y + h);
@@ -1689,11 +1744,65 @@ toggleSelectSegment(i) {
     }
   }
 
+  renderRulerBg(ctx) {
+    ctx.fillStyle = COLORS.rulerBg;
+    ctx.fillRect(0, RULER.y, this.w, RULER.h);
+  }
+
+  renderWaveform(ctx, viewEnd) {
+    const wf = app && app.state && app.state.waveform;
+    if (!wf || !wf.enabled) return;
+    if (!this._wfLayer || this._wfLayer.width !== Math.round(this.w * this.dpr) || this._wfLayer.height !== Math.round(this.h * this.dpr)) {
+      this._wfLayer = document.createElement('canvas');
+      this._wfLayer.width = Math.round(this.w * this.dpr);
+      this._wfLayer.height = Math.round(this.h * this.dpr);
+    }
+    const lc = this._wfLayer.getContext('2d');
+    lc.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    lc.clearRect(0, 0, this.w, this.h);
+    const viewStart = this.viewStart;
+    for (const slice of wf.slices.values()) {
+      if (!slice || !slice.img) continue;
+      if (slice.to < viewStart || slice.from > viewEnd) continue;
+      const x = this.timeToX(slice.from);
+      const w = (slice.to - slice.from) * this.pxPerSec;
+      const visX0 = Math.max(0, x);
+      const visX1 = Math.min(this.w, x + w);
+      if (visX1 <= visX0) continue;
+      const img = slice.img;
+      const srcX = (visX0 - x) / w * img.naturalWidth;
+      const srcW = (visX1 - visX0) / w * img.naturalWidth;
+      lc.drawImage(img, srcX, 0, srcW, img.naturalHeight, visX0, SEG.y, visX1 - visX0, SEG.h);
+    }
+    if (WAVEFORM_OFF_DIM > 0 && this.markers && this.markers.length) {
+      lc.fillStyle = 'rgba(0,0,0,' + WAVEFORM_OFF_DIM + ')';
+      const sm = this.sortedMarkers();
+      const cuts = this.model.cuts;
+      const deleted = this.model.deleted;
+      let prev = 0;
+      for (const m of sm) {
+        if (m.off) {
+          for (let i = 0; i < cuts.length - 1; i++) {
+            const o0 = Math.max(prev, cuts[i]);
+            const o1 = Math.min(m.t, cuts[i + 1]);
+            if (o1 <= o0) continue;
+            if (deleted[i]) continue;
+            const x0 = this.timeToX(o0);
+            const x1 = this.timeToX(o1);
+            lc.fillRect(x0, SEG.y, x1 - x0, SEG.h);
+          }
+        }
+        prev = m.t;
+      }
+    }
+    ctx.save();
+    ctx.globalAlpha = KEYFRAME_ALPHA_BRIGHT * WAVEFORM_COEFF;
+    ctx.drawImage(this._wfLayer, 0, 0, this.w, this.h);
+    ctx.restore();
+  }
+
   renderRuler(ctx) {
     const { y, h } = RULER;
-    ctx.fillStyle = COLORS.rulerBg;
-    ctx.fillRect(0, y, this.w, h);
-
     const step = niceStep(60 / this.pxPerSec);
     const showMs = step < 0.5;
     const showHms = step >= 60;
@@ -1706,14 +1815,14 @@ toggleSelectSegment(i) {
     ctx.textAlign = 'left';
     for (let i = startIdx; i <= endIdx; i++) {
       const t = i * step;
-      const x = this.timeToX(t);
+      const x = this.timeToX(t) - 0.5;
       ctx.fillRect(x, y + h - 6, 1, 6);
       if (showMs) {
         ctx.fillRect(x, y + h - 3, 1, 3);
       }
       const label = showMs ? fmtTime(t, true) : (showHms ? fmtTime(t, false) : fmtTime(t, false));
       ctx.fillStyle = COLORS.rulerLabel;
-      ctx.fillText(label, x + 3, y + h - 8);
+      ctx.fillText(label, x + 3, y + h - 7);
       ctx.fillStyle = COLORS.rulerTick;
     }
 
@@ -1721,8 +1830,11 @@ toggleSelectSegment(i) {
     const minor = step / 5;
     if (minor * this.pxPerSec >= 4) {
       ctx.fillStyle = COLORS.rulerMinor;
-      for (let t = this.viewStart; t <= this.viewStart + this.w / this.pxPerSec; t += minor) {
-        ctx.fillRect(this.timeToX(t), y + h - 3, 1, 3);
+      const m0 = Math.ceil(this.viewStart / minor);
+      const m1 = Math.floor((this.viewStart + this.w / this.pxPerSec) / minor);
+      for (let m = m0; m <= m1; m++) {
+        if (m % 5 === 0) continue;
+        ctx.fillRect(this.timeToX(m * minor) - 0.5, y + h - 3, 1, 3);
       }
     }
   }
@@ -1772,7 +1884,12 @@ const app = {
     cursor: 0,
     projectPath: null,
     exporting: false,
-    dirty: false
+    dirty: false,
+    waveform: {
+      enabled: true,
+      slices: new Map(),
+      pending: new Set()
+    }
   },
 
   init() {
@@ -1869,6 +1986,13 @@ const app = {
       if (e.code === 'Enter' || e.code === 'Escape') {
         e.preventDefault();
         this.hideMarkerBubble();
+      } else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
+        e.preventDefault();
+        if (e.shiftKey) this.redo();
+        else this.undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY') {
+        e.preventDefault();
+        this.redo();
       }
     });
     $('marker-name').addEventListener('blur', () => this.hideMarkerBubble());
@@ -1968,6 +2092,11 @@ const app = {
   },
 
   async handleDroppedFile(p) {
+    const lm = $('locate-modal');
+    if (lm && !lm.classList.contains('hidden')) {
+      if (this._locateVerify) this._locateVerify(p);
+      return;
+    }
     if (!await this.confirmDiscardIfDirty()) { this.setStatus('Open cancelled'); return; }
     this.scrubEnd();
     if (/\.kc$/i.test(p)) await this.openProjectFromPath(p);
@@ -2210,7 +2339,15 @@ guardTarget(t) {
       if (mod && e.code === 'KeyO') { e.preventDefault(); this.openFile(); return; }
       if (mod && !e.shiftKey && e.code === 'KeyS') { e.preventDefault(); this.saveProject(); return; }
       if (mod && e.shiftKey && e.code === 'KeyS') { e.preventDefault(); this.navPause(() => this.homeNav()); return; }
-      if (mod && e.code === 'KeyE') { e.preventDefault(); this.export(); return; }
+      if (mod && e.code === 'KeyE') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (!$('btn-export-parts').disabled) this.exportParts();
+          return;
+        }
+        this.export();
+        return;
+      }
       if (mod && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
       if (mod && e.code === 'KeyY') { e.preventDefault(); this.redo(); return; }
       if (mod && !e.shiftKey && e.code === 'KeyF') { e.preventDefault(); this.toggleFind(); return; }
@@ -2428,7 +2565,96 @@ guardTarget(t) {
     });
     this.updateStats();
     this.setVideoEnabled(true);
-    this.fitWindowToVideo(meta.width, meta.height);
+    if (!this._skipFitWindow) this.fitWindowToVideo(meta.width, meta.height);
+    this._skipFitWindow = false;
+    this.state.waveform.slices.clear();
+    this.state.waveform.pending.clear();
+    if (this.state.waveform.enabled) this.scheduleWaveformRender();
+  },
+
+  audioStreamIndex() {
+    const streams = this.state.streams || [];
+    const a = streams.find((s) => s.codec_type === 'audio');
+    return a ? a.index : null;
+  },
+
+  timelineViewChanged() {
+    const tl = this.timeline;
+    if (!tl || !this.state.waveform.enabled) return;
+    if (this._wfVS === tl.viewStart && this._wfPPS === tl.pxPerSec) return;
+    this._wfVS = tl.viewStart;
+    this._wfPPS = tl.pxPerSec;
+    this.scheduleWaveformRender();
+  },
+
+  scheduleWaveformRender() {
+    clearTimeout(this._wfTimer);
+    this._wfTimer = setTimeout(() => this.renderWaveformSlices(), 150);
+  },
+
+  renderWaveformSlices() {
+    const w = this.state.waveform;
+    const tl = this.timeline;
+    if (!w.enabled || !tl || !this.state.source) return;
+    const audio = this.audioStreamIndex();
+    if (audio == null) return;
+    const vis = tl.w / tl.pxPerSec;
+    const windowSize = Math.max(0.25, Math.min(60, vis * 4));
+    const from = tl.viewStart - windowSize;
+    const to = tl.viewStart + vis + windowSize;
+    const center = tl.viewStart + vis / 2;
+    const missing = [];
+    for (let s = Math.floor(from / windowSize) * windowSize; s < to; s += windowSize) {
+      const key = Math.round(s * 1e6) / 1e6;
+      if (w.slices.has(key) || w.pending.has(key)) continue;
+      const dur = Math.min(windowSize, this.state.duration - key);
+      if (dur <= 0) continue;
+      missing.push({ key, dur, dist: Math.abs(key + dur / 2 - center) });
+    }
+    missing.sort((a, b) => a.dist - b.dist);
+    const spawnCount = Math.min(4, missing.length);
+    for (let i = 0; i < spawnCount; i++) {
+      const m = missing[i];
+      w.pending.add(m.key);
+      this.renderWaveformSlice(m.key, m.dur, audio);
+    }
+    if (w.slices.size > 60) {
+      const sorted = [...w.slices.keys()].sort((a, b) => Math.abs(a - center) - Math.abs(b - center));
+      while (sorted.length > 60) {
+        const k = sorted.pop();
+        const sl = w.slices.get(k);
+        if (sl && sl.url) { try { URL.revokeObjectURL(sl.url); } catch {} }
+        w.slices.delete(k);
+      }
+    }
+  },
+
+  async renderWaveformSlice(from, dur, audioIdx) {
+    const w = this.state.waveform;
+    if (!w.enabled || !this.state.source) return;
+    let res;
+    try {
+      res = await window.keycut.renderWaveform(this.state.source, { start: from, duration: dur, streamIndex: audioIdx, width: 2000, height: 300 });
+    } catch {
+      w.pending.delete(from);
+      return;
+    }
+    w.pending.delete(from);
+    if (!w.enabled || !res || !res.ok) return;
+    try {
+      const blob = new Blob([new Uint8Array(res.data)], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        w.slices.set(from, { from, to: from + dur, img, url });
+        this.timeline.needsRender = true;
+        this.timeline.tick();
+      };
+      img.onerror = () => { try { URL.revokeObjectURL(url); } catch {} };
+      img.src = url;
+    } catch {
+      /* ignore */
+    }
   },
 
   
@@ -2832,8 +3058,10 @@ frameDeleted(t) {
   prevKeyframe() {
     const t = this.state.cursor;
     const keys = this.state.activeKeys || this.state.keyTimes;
+    if (!keys || !keys.length) return;
     let idx = binaryFirst(keys, t);
-    if (idx < keys.length && keys[idx] >= t - 1e-6) idx--;
+    if (idx >= keys.length) idx = keys.length - 1;
+    if (keys[idx] >= t - 1e-6) idx--;
     while (idx >= 0 && Math.abs(keys[idx] - t) < 1e-6) idx--;
     if (idx >= 0) this.seekTo(keys[idx]);
   },
@@ -3134,7 +3362,8 @@ releaseFrameNav() {
   },
 
   seekTo(t) {
-    const snapped = snapKey(t, this.state.activeKeys || this.state.keyTimes);
+    const end = this.state.duration || 0;
+    const snapped = endSnap(t, end, this.state.activeKeys || this.state.keyTimes, this.state.fps);
     this.state.cursor = snapped;
     this.timeline.cursor = snapped;
     this.timeline.needsRender = true;
@@ -3165,7 +3394,13 @@ releaseFrameNav() {
       cursor: this.state.cursor,
       zoom: this.timeline ? this.timeline.pxPerSec : 0,
       viewStart: this.timeline ? this.timeline.viewStart : 0,
-      markers: this.timeline ? this.timeline.markers : []
+      markers: this.timeline ? this.timeline.markers : [],
+      winBounds: {
+        x: window.screenX,
+        y: window.screenY,
+        w: window.outerWidth,
+        h: window.outerHeight
+      }
     };
     const res = await window.keycut.saveProject(filePath, data);
     if (res && res.ok) {
@@ -3184,10 +3419,8 @@ releaseFrameNav() {
       const nameEl = $('locate-name');
       const pathEl = $('locate-path');
       const spinner = $('locate-spinner');
-      const openBtn = $('locate-open');
       const warn = $('locate-warn');
       const chooseBtn = $('locate-choose');
-      let result = null;
       let verifying = false;
       nameEl.textContent = data.src.split(/[\\/]/).pop();
       pathEl.textContent = '';
@@ -3208,54 +3441,53 @@ releaseFrameNav() {
         } else {
           spinner.classList.add('hidden');
         }
-        openBtn.classList.toggle('ok', s === 'ok' || s === 'warn');
-        openBtn.classList.toggle('err', s === 'err');
-        openBtn.disabled = s !== 'ok' && s !== 'warn';
         warn.classList.toggle('hidden', s !== 'err');
       };
       const finish = (r) => {
         this._locateResolve = null;
+        this._locateVerify = null;
         modal.classList.add('hidden');
         resolve(r);
       };
       this._locateResolve = finish;
-      const doChoose = async () => {
+      const verifyPath = async (p) => {
         if (verifying) return;
-        const p = await window.keycut.chooseFile();
-        if (!p) return;
-        const btn = $('locate-choose');
-        $('locate-choose-label').textContent = ellipsizeMidFit(p.split(/[\\/]/).pop(), btn.clientWidth - 44, getComputedStyle(btn).font);
-        pathEl.textContent = p;
         verifying = true;
         chooseBtn.disabled = true;
+        pathEl.textContent = p;
         setState('checking');
         try {
           const m = await window.keycut.probeQuick(p);
           if (!m || m.error || m.duration == null || m.width == null || m.height == null) {
             setState('err');
-            verifying = false;
-            chooseBtn.disabled = false;
             return;
           }
           const v = data.video || {};
           const durOk = !v.dur || Math.abs(m.duration - v.dur) <= Math.max(0.1, v.dur * 0.01);
-          const whOk = (!v.w || m.width === v.w) && (!v.h || m.height === v.h);
+          const whOk = !v.w || (m.width === v.w && m.height === v.h) || (m.width === v.h && m.height === v.w);
           const fpsOk = !v.fps || !m.fps || Math.abs(m.fps - v.fps) <= 1;
           const sizeOk = !v.size || !m.size || Math.abs(m.size - v.size) <= v.size * 0.01;
           if (!durOk || !whOk || !fpsOk || !sizeOk) {
             setState('err');
-          } else {
-            result = { path: p };
-            setState('ok');
+            return;
           }
+          finish({ path: p });
         } catch {
           setState('err');
+        } finally {
+          verifying = false;
+          chooseBtn.disabled = false;
         }
-        verifying = false;
-        chooseBtn.disabled = false;
+      };
+      this._locateVerify = verifyPath;
+      const doChoose = async () => {
+        const p = await window.keycut.chooseFile();
+        if (!p) return;
+        const btn = $('locate-choose');
+        $('locate-choose-label').textContent = ellipsizeMidFit(p.split(/[\\/]/).pop(), btn.clientWidth - 44, getComputedStyle(btn).font);
+        verifyPath(p);
       };
       chooseBtn.onclick = doChoose;
-      openBtn.onclick = () => finish(result);
       modal.addEventListener('click', function onOverlay(e) {
         if (e.target === modal) {
           modal.removeEventListener('click', onOverlay);
@@ -3281,6 +3513,10 @@ releaseFrameNav() {
     if (data.srcRel) {
       const r = await window.keycut.resolveProjectSource(filePath, data.srcRel);
       if (r && r.path) data.src = r.path;
+    }
+    if (data.winBounds && (data.winBounds.w || data.winBounds.h)) {
+      this._skipFitWindow = true;
+      window.keycut.setWindowBounds(data.winBounds);
     }
 
     this.setStatus('Analyzing source video…', true);

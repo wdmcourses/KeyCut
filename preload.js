@@ -15,12 +15,14 @@ contextBridge.exposeInMainWorld('keycut', {
 
   probeVideo: (filePath) => ipcRenderer.invoke('probe:video', filePath),
   probeQuick: (p) => ipcRenderer.invoke('probe:quick', p),
+  renderWaveform: (filePath, opts) => ipcRenderer.invoke('waveform:render', { filePath, ...opts }),
   ffmpegPath: () => ipcRenderer.invoke('ffmpegPath'),
   lockSource: (filePath) => ipcRenderer.invoke('source:lock', filePath),
   fileExists: (p) => ipcRenderer.invoke('file:exists', p),
   chooseFile: () => ipcRenderer.invoke('dialog:chooseFile'),
   workArea: () => ipcRenderer.invoke('screen:workArea'),
   setWindowSize: (width, height) => ipcRenderer.invoke('win:setSize', { width, height }),
+  setWindowBounds: (bounds) => ipcRenderer.invoke('win:setBounds', bounds),
 
   saveProject: (filePath, data) => ipcRenderer.invoke('project:save', { filePath, data }),
   loadProject: (filePath) => ipcRenderer.invoke('project:load', filePath),

@@ -49,7 +49,7 @@
           <button id="btn-open" class="toolbar-btn compact" title="Open file (Ctrl+O)">Open</button>
           <button id="btn-save" class="toolbar-btn compact" title="Save project (Ctrl+S)">Save</button>
           <button id="btn-export" class="toolbar-btn compact primary" title="Export lossless (Ctrl+E)">Export</button>
-          <button id="btn-export-parts" class="toolbar-btn compact primary" title="Export each marker part to a file" disabled>Multiexport</button>
+          <button id="btn-export-parts" class="toolbar-btn compact primary" title="Export each marker part to a file (Ctrl+Shift+E)" disabled>Multiexport</button>
         </div>
       </div>
     </section>
@@ -96,7 +96,7 @@
       <span class="hint"><kbd>X</kbd> Del · <kbd>R</kbd> Restore</span>
       <span class="hint"><kbd>E</kbd> Merge</span>
       <span class="hint"><kbd>S</kbd><kbd>F</kbd> Frame</span>
-      <span class="hint"><kbd>Ctrl+E</kbd> Export</span>
+      <span class="hint"><kbd>Ctrl+E</kbd> Export · <kbd>Ctrl+Shift+E</kbd> Multiexport</span>
       <button id="btn-help" class="help-btn" title="Keyboard shortcuts">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </button>
@@ -150,12 +150,11 @@
   <div id="locate-modal" class="hidden">
     <div id="locate-modal-card">
       <div id="locate-modal-title">Source file not found</div>
-      <div id="locate-modal-msg">The project references <b id="locate-name"></b>, which is missing. Please locate the original file.</div>
+      <div id="locate-modal-msg">The project references <b id="locate-name"></b>, which is missing. Choose the original file or drop it onto the window.</div>
       <button id="locate-choose" type="button"><span id="locate-choose-label">Choose file</span><span id="locate-spinner" class="hidden"></span></button>
       <div id="locate-path" class="locate-path"></div>
       <div class="locate-actions">
         <span id="locate-warn" class="hidden">This is not the right file</span>
-        <button id="locate-open" type="button" disabled>Open</button>
       </div>
     </div>
   </div>
