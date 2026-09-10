@@ -2419,6 +2419,7 @@ guardTarget(t) {
     const b = $('marker-bubble');
     b.classList.remove('hidden');
     this.syncMarkerBubble();
+    if (!$('find-bar').classList.contains('hidden')) return;
     inp.focus();
     inp.setSelectionRange(inp.value.length, inp.value.length);
   },
