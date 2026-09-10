@@ -224,7 +224,7 @@ body {
 .ctrl-btn.play-btn {
   background: linear-gradient(180deg, var(--accent-strong), var(--accent));
   border: none;
-  color: #ffffff;
+  color: var(--on-accent);
 }
 .ctrl-btn.play-btn:hover { filter: brightness(1.08); }
 
