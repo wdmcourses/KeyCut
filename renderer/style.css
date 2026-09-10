@@ -148,7 +148,7 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 14px 18px 6px;
+  padding: 10px 10px 4px;
 }
 
 #video-wrap {
@@ -201,13 +201,14 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 2px 2px;
+  padding: 0 2px;
+  margin-top: 4px;
   position: relative;
 }
 
 .ctrl-btn {
-  width: 30px; height: 30px;
-  border-radius: var(--radius-md);
+  width: 31px; height: 31px;
+  border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--text);
@@ -256,7 +257,7 @@ body {
 
 #timeline-section {
   flex: 0 0 auto;
-  padding: 0 18px 12px;
+  padding: 0 10px 10px;
 }
 
 #timeline-wrap {
@@ -420,13 +421,16 @@ body {
   bottom: 0;
   width: var(--sb-caret, 12px);
   background: var(--scrollbar-caret);
-  cursor: grab;
+  cursor: ew-resize;
   z-index: 2;
 }
 #scrollbar-handle-l { left: 0; border-radius: var(--radius) 0 0 var(--radius); }
 #scrollbar-handle-r { right: 0; border-radius: 0 var(--radius) var(--radius) 0; }
 #scrollbar-handle-l:hover, #scrollbar-handle-r:hover {
   background: var(--scrollbar-caret-hover);
+}
+#scrollbar-handle-l:hover::after, #scrollbar-handle-r:hover::after {
+  border-color: #ffffff;
 }
 #scrollbar-handle-l::after, #scrollbar-handle-r::after {
   content: '';
@@ -467,17 +471,17 @@ body {
   cursor: pointer;
 }
 #zoom-range::-webkit-slider-runnable-track {
-  height: 4px;
+  height: 7px;
   margin-top: 0;
-  border-radius: 2px;
-  background: rgba(255,255,255,0.16);
+  border-radius: 999px;
+  background: #3a4148;
 }
 #zoom-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 12px;
   height: 12px;
-  margin-top: -4px;
+  margin-top: -2.5px;
   border-radius: 50%;
   background: linear-gradient(180deg, var(--accent-strong), var(--accent));
   box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.5);
@@ -494,7 +498,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 14px;
+  padding: 0 10px;
   background: var(--panel);
   border-top: 1px solid var(--border);
   font-size: 12px;

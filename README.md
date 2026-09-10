@@ -46,6 +46,7 @@ output keeps the original quality and the whole operation is fast.</p>
 | Ctrl+Shift+S / Ctrl+Shift+F | Previous / next marker (or start / end) |
 | Ctrl+F · Enter / Shift+Enter | Find marker · next / prev |
 | Ctrl+E | Export |
+| Ctrl+Shift+E | Export each marker part |
 
 ## Getting started
 
