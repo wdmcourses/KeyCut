@@ -76,9 +76,14 @@
           </div>
         </div>
         <div id="zoom-row">
-          <button id="btn-zoom-out" class="mini-btn" title="Zoom out">&minus;</button>
-          <input id="zoom-range" type="range" min="0" max="100" value="50" />
-          <button id="btn-zoom-in" class="mini-btn" title="Zoom in">+</button>
+          <div id="zoom-controls">
+            <button id="btn-zoom-out" class="mini-btn" title="Zoom out">&minus;</button>
+            <input id="zoom-range" type="range" min="0" max="100" value="50" />
+            <button id="btn-zoom-in" class="mini-btn" title="Zoom in">+</button>
+          </div>
+          <div id="fit-group" class="hidden">
+            <span id="fit-label">Editor size:</span>
+          </div>
           <div id="stats"></div>
         </div>
       </div>

@@ -32,9 +32,8 @@ const PLAY_SVG = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M8.5 
 const PAUSE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="5.5" width="3.6" height="13" rx="1.2" fill="currentColor"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1.2" fill="currentColor"/></svg>';
 const MIN_WIN_W = 900;
 const MIN_WIN_H = 560;
-const MAX_PREVIEW_W = 2560;
-const MAX_PREVIEW_H = 1440;
 const PREVIEW_ASPECT = 16 / 9;
+const FIT_SCALES = [10, 15, 20, 25, 30, 40, 50, 60, 75, 90, 100, 110, 125, 150, 175, 200, 225, 250, 275, 300, 350, 400];
 
 
 const COLORS = {
@@ -2060,18 +2059,15 @@ const app = {
     this.bindVideo();
     this.bindKeys();
 
-    setTimeout(() => this.fitInitialWindow(), 150);
-
     window.keycut.onCloseRequest(() => this.handleCloseRequest());
 
     this.setVideoEnabled(false);
     this.setStatus('Ready');
 
-    
-    
     window.keycut.getOpenFile().then((p) => {
       if (p) this.handleDroppedFile(p);
-    }).catch(() => {});
+      else setTimeout(() => this.fitInitialWindow(), 0);
+    }).catch(() => setTimeout(() => this.fitInitialWindow(), 0));
     window.keycut.onOpenFile((p) => this.handleDroppedFile(p));
   },
 
@@ -2129,6 +2125,7 @@ const app = {
     });
     $('btn-zoom-in').addEventListener('click', () => { zr.value = Math.min(100, +zr.value + 8); zr.dispatchEvent(new Event('input')); });
     $('btn-zoom-out').addEventListener('click', () => { zr.value = Math.max(0, +zr.value - 8); zr.dispatchEvent(new Event('input')); });
+    this.buildFitButtons();
 
     
     window.addEventListener('click', (e) => {
@@ -2565,8 +2562,10 @@ guardTarget(t) {
     });
     this.updateStats();
     this.setVideoEnabled(true);
-    if (!this._skipFitWindow) this.fitWindowToVideo(meta.width, meta.height);
+    this._videoSize = { width: meta.width, height: meta.height };
+    if (!this._skipFitWindow) this.fitWindowToVideo();
     this._skipFitWindow = false;
+    this.updateFitButtons();
     this.state.waveform.slices.clear();
     this.state.waveform.pending.clear();
     if (this.state.waveform.enabled) this.scheduleWaveformRender();
@@ -2722,52 +2721,142 @@ guardTarget(t) {
     $('video-placeholder').style.display = on ? 'none' : 'flex';
   },
 
-  chromeMetrics() {
-    const wrap = $('video-wrap');
-    const rect = wrap.getBoundingClientRect();
+  async fitInitialWindow() {
+    if (this.state.source) return;
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await frame();
+    const g = this.fitGeometry();
+    const vw = (MIN_WIN_W - g.frameW) - g.HOff;
+    const vh = vw / PREVIEW_ASPECT;
+    const nW = Math.max(MIN_WIN_W - g.frameW, Math.round(vw + g.HOff));
+    const nH = Math.max(MIN_WIN_H - g.frameH, Math.round(vh + g.VOff));
+    await window.keycut.setWindowContentSize(nW, nH, g.frameW, g.frameH);
+  },
+
+  fitGeometry() {
+    const videoEl = $('video');
+    const rect = videoEl.getBoundingClientRect();
     return {
-      HPad: Math.max(0, window.innerWidth - rect.width),
-      VFixed: Math.max(0, window.innerHeight - rect.height)
+      frameW: Math.max(0, window.outerWidth - window.innerWidth),
+      frameH: Math.max(0, window.outerHeight - window.innerHeight),
+      HOff: window.innerWidth - rect.width,
+      VOff: window.innerHeight - rect.height
     };
   },
 
-  async fitInitialWindow() {
-    const { HPad, VFixed } = this.chromeMetrics();
-    const vw = MIN_WIN_W - HPad;
-    const vh = vw / PREVIEW_ASPECT;
-    await window.keycut.setWindowSize(Math.round(vw + HPad), Math.round(vh + VFixed));
-  },
-
-  async fitWindowToVideo(vw, vh) {
-    if (!vw || !vh) return;
+  async applyFit(targetW, targetH) {
+    if (!targetW || !targetH) return;
     const videoEl = $('video');
     const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const settle = async () => { await frame(); await new Promise((r) => setTimeout(r, 40)); };
     let wa = { width: window.screen.width, height: window.screen.height };
     try { wa = await window.keycut.workArea(); } catch {}
-    await frame();
-    const dpr = window.devicePixelRatio || 1;
-    const targetW = Math.min(vw, MAX_PREVIEW_W) / dpr;
-    const targetH = Math.min(vh, MAX_PREVIEW_H) / dpr;
     const A = targetW / targetH;
-    const rect = videoEl.getBoundingClientRect();
-    const HChrome = window.innerWidth - rect.width;
-    const VChrome = window.innerHeight - rect.height;
-    const availW = Math.min(targetW, Math.max(1, wa.width - HChrome));
-    const availH = Math.min(targetH, Math.max(1, wa.height - VChrome));
-    let w2 = availW, h2 = availH;
-    if (w2 / h2 > A) w2 = h2 * A; else h2 = w2 / A;
-    const minVW = MIN_WIN_W - HChrome;
-    if (w2 < minVW) { w2 = minVW; h2 = w2 / A; }
-    let W = Math.round(w2 + HChrome);
-    let H = Math.round(h2 + VChrome);
-    for (let i = 0; i < 4; i++) {
-      await window.keycut.setWindowSize(W, H);
-      await frame();
-      const r = videoEl.getBoundingClientRect();
-      const dw = Math.round(w2) - r.width;
-      const dh = Math.round(h2) - r.height;
+    await settle();
+    let nW = null, nH = null;
+    for (let i = 0; i < 3; i++) {
+      const g = this.fitGeometry();
+      const availW = Math.min(targetW, Math.max(1, wa.width - g.frameW - g.HOff));
+      const availH = Math.min(targetH, Math.max(1, wa.height - g.frameH - g.VOff));
+      let w2 = availW, h2 = availH;
+      if (w2 / h2 > A) w2 = h2 * A; else h2 = w2 / A;
+      const minVW = (MIN_WIN_W - g.frameW) - g.HOff;
+      const minVH = (MIN_WIN_H - g.frameH) - g.VOff;
+      if (w2 < minVW) { w2 = minVW; h2 = w2 / A; }
+      if (h2 < minVH) { h2 = minVH; w2 = h2 * A; }
+      if (nW == null) {
+        nW = Math.max(MIN_WIN_W - g.frameW, Math.round(w2 + g.HOff));
+        nH = Math.max(MIN_WIN_H - g.frameH, Math.round(h2 + g.VOff));
+      }
+      await window.keycut.setWindowContentSize(nW, nH, g.frameW, g.frameH);
+      await settle();
+      const r2 = videoEl.getBoundingClientRect();
+      const dw = Math.round(w2) - r2.width;
+      const dh = Math.round(h2) - r2.height;
       if (Math.abs(dw) < 1 && Math.abs(dh) < 1) break;
-      W += Math.round(dw); H += Math.round(dh);
+      nW += Math.round(dw); nH += Math.round(dh);
+    }
+  },
+
+  videoFitSize() {
+    if (this._videoSize) return this._videoSize;
+    const v = this.video;
+    if (v && v.videoWidth && v.videoHeight) return { width: v.videoWidth, height: v.videoHeight };
+    return { width: this.state.width, height: this.state.height };
+  },
+
+  async fitWindowToVideo() {
+    const { width, height } = this.videoFitSize();
+    if (!width || !height) return;
+    const dpr = window.devicePixelRatio || 1;
+    await this.applyFit(width / dpr, height / dpr);
+  },
+
+  async fitWindowScale(scale) {
+    const { width, height } = this.videoFitSize();
+    if (!width || !height) return;
+    const dpr = window.devicePixelRatio || 1;
+    await this.applyFit(width / dpr * scale, height / dpr * scale);
+  },
+
+  async updateFitButtons() {
+    const { width: vw, height: vh } = this.videoFitSize();
+    const group = $('fit-group');
+    if (!vw || !vh) {
+      if (group) group.classList.add('hidden');
+      return;
+    }
+    if (group) group.classList.remove('hidden');
+    const dpr = window.devicePixelRatio || 1;
+    const g = this.fitGeometry();
+    let wa = { width: window.screen.width, height: window.screen.height };
+    try { wa = await window.keycut.workArea(); } catch {}
+    const fits = [];
+    for (const pct of FIT_SCALES) {
+      const s = pct / 100;
+      const W = vw / dpr * s + g.HOff;
+      const H = vh / dpr * s + g.VOff;
+      if (W >= (MIN_WIN_W - g.frameW) && H >= (MIN_WIN_H - g.frameH) && (W + g.frameW) <= wa.width && (H + g.frameH) <= wa.height) fits.push(pct);
+    }
+    let shown = fits;
+    if (fits.length > 7) {
+      const idx100 = fits.indexOf(100);
+      if (idx100 >= 0) {
+        const pick = (arr, n) => { if (arr.length <= n) return arr; const step = (arr.length - 1) / (n - 1 || 1); return Array.from({ length: n }, (_, i) => arr[Math.round(i * step)]); };
+        shown = [...pick(fits.slice(0, idx100), 3), 100, ...pick(fits.slice(idx100 + 1), 3)];
+      } else {
+        const step = (fits.length - 1) / 6;
+        shown = Array.from({ length: 7 }, (_, i) => fits[Math.round(i * step)]);
+      }
+    }
+    for (const pct of FIT_SCALES) {
+      const btn = $('btn-fit-' + pct);
+      if (!btn) continue;
+      btn.style.display = shown.includes(pct) ? '' : 'none';
+    }
+    const fitBtn = $('btn-fit-init');
+    if (fitBtn) fitBtn.style.display = shown.includes(100) ? 'none' : '';
+  },
+
+  buildFitButtons() {
+    const group = $('fit-group');
+    if (!group) return;
+    group.querySelectorAll('.fit-btn').forEach((b) => b.remove());
+    const init = document.createElement('button');
+    init.className = 'mini-btn fit-btn';
+    init.id = 'btn-fit-init';
+    init.textContent = 'FIT';
+    init.title = 'Fit editor to screen';
+    init.addEventListener('click', () => this.fitWindowToVideo());
+    group.appendChild(init);
+    for (const pct of FIT_SCALES) {
+      const btn = document.createElement('button');
+      btn.className = 'mini-btn fit-btn';
+      btn.id = 'btn-fit-' + pct;
+      btn.textContent = pct + '%';
+      btn.title = 'Editor size ' + pct + '%';
+      btn.addEventListener('click', () => this.fitWindowScale(pct / 100));
+      group.appendChild(btn);
     }
   },
 
@@ -2823,6 +2912,7 @@ guardTarget(t) {
     this.state.source = path;
     window.keycut.lockSource(path);
     this.state.projectPath = null;
+    this._videoSize = null;
     this.cancelSkipMute();
     this.stopPlaybackGuard();
     this.cancelStepPause();

@@ -447,9 +447,16 @@ body {
 #zoom-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding-top: 7px;
 }
+#zoom-controls { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+#zoom-controls .mini-btn { flex: 0 0 20px; }
+#fit-group { display: flex; align-items: center; gap: 4px; }
+#fit-group.hidden { display: none; }
+#fit-group .mini-btn { flex: 0 0 auto; width: auto; padding: 0 8px; font-size: 11px; }
+#fit-label { color: var(--text-faint); font-size: 12px; white-space: nowrap; margin-right: 4px; }
 .mini-btn {
   width: 20px; height: 20px;
   border-radius: var(--radius-sm);
@@ -461,7 +468,6 @@ body {
   line-height: 1;
 }
 .mini-btn:hover { background: var(--control-hover); color: var(--text); }
-.mini-btn.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent-strong); }
 #zoom-range {
   -webkit-appearance: none;
   appearance: none;
@@ -487,7 +493,7 @@ body {
   box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.5);
 }
 #zoom-range:hover::-webkit-slider-thumb { filter: brightness(1.12); }
-#stats { margin-left: auto; color: var(--text-faint); font-size: 12px; display: flex; gap: 14px; }
+#stats { color: var(--text-faint); font-size: 12px; display: flex; gap: 14px; }
 #stats b { color: var(--text-dim); font-weight: 600; }
 
 
