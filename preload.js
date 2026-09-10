@@ -36,6 +36,21 @@ contextBridge.exposeInMainWorld('keycut', {
     return () => ipcRenderer.removeListener('export:progress', listener);
   },
 
+  convertAnalyze: (payload) => ipcRenderer.invoke('convert:analyze', payload),
+  convertStart: (payload) => ipcRenderer.invoke('convert:start', payload),
+  convertCancel: () => ipcRenderer.invoke('convert:cancel'),
+  convertRemoveOutput: (payload) => ipcRenderer.invoke('convert:remove-output', payload),
+  onConvertAnalyzeProgress: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('convert:analyze-progress', listener);
+    return () => ipcRenderer.removeListener('convert:analyze-progress', listener);
+  },
+  onConvertProgress: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('convert:progress', listener);
+    return () => ipcRenderer.removeListener('convert:progress', listener);
+  },
+
   confirmClose: () => ipcRenderer.invoke('dialog:confirmClose'),
   forceClose: () => ipcRenderer.send('app:force-close'),
   onCloseRequest: (cb) => {

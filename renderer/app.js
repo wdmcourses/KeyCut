@@ -2044,7 +2044,7 @@ const app = {
     document.addEventListener('click', (e) => {
       const t = e.target;
       if (!t || !t.closest) return;
-      if (t.closest('#find-bar') || t.closest('#marker-bubble') || t.closest('#locate-modal') || t.closest('#export-modal') || t.closest('#help-modal')) return;
+      if (t.closest('#find-bar') || t.closest('#marker-bubble') || t.closest('#locate-modal') || t.closest('#export-modal') || t.closest('#help-modal') || t.closest('#convert-modal')) return;
       if (t.closest('button')) {
         this.closeFind();
         this.hideMarkerBubble();
@@ -2088,6 +2088,8 @@ const app = {
   },
 
   async handleDroppedFile(p) {
+    const cs = this._convertState;
+    if (cs === 'analyzing' || cs === 'converting' || cs === 'done') { this.setStatus('Busy: conversion in progress'); return; }
     const lm = $('locate-modal');
     if (lm && !lm.classList.contains('hidden')) {
       if (this._locateVerify) this._locateVerify(p);
@@ -2116,6 +2118,16 @@ const app = {
     $('help-modal-close').addEventListener('click', () => $('help-modal').classList.add('hidden'));
     $('help-modal').addEventListener('click', (e) => {
       if (e.target === $('help-modal')) $('help-modal').classList.add('hidden');
+    });
+    $('btn-set-keys').addEventListener('click', () => this.setKeys());
+    $('convert-cancel').addEventListener('click', () => this.cancelConvert());
+    $('convert-place').addEventListener('click', () => this.placeVideo(false));
+    $('convert-action').addEventListener('click', () => this.convertAction());
+    $('convert-modal').addEventListener('click', (e) => {
+      if (e.target === $('convert-modal')) {
+        const cs = this._convertState;
+        if (cs === 'ready' || cs === 'error') this.closeConvertModal();
+      }
     });
 
     const zr = $('zoom-range');
@@ -2323,6 +2335,8 @@ guardTarget(t) {
   bindKeys() {
     window.addEventListener('keydown', (e) => {
       if (e.target && e.target.tagName === 'INPUT') return;
+      const cs = this._convertState;
+      if (cs === 'analyzing' || cs === 'converting' || cs === 'done') return;
       if (!$('help-modal').classList.contains('hidden')) {
         if (e.code === 'Escape') {
           e.preventDefault();
@@ -2386,6 +2400,12 @@ guardTarget(t) {
         this.cancelStepPause();
         const hm = $('help-modal');
         if (hm && !hm.classList.contains('hidden')) { hm.classList.add('hidden'); return; }
+        const cm = $('convert-modal');
+        if (cm && !cm.classList.contains('hidden')) {
+          const cs = this._convertState;
+          if (cs === 'ready' || cs === 'error') { this.closeConvertModal(); return; }
+          return;
+        }
         if (this._locateResolve) { this._locateResolve(null); return; }
         if (!$('find-bar').classList.contains('hidden')) { this.closeFind(); return; }
         if (this._markerBubbleId != null) { this.hideMarkerBubble(); return; }
@@ -2719,6 +2739,7 @@ guardTarget(t) {
     $('btn-nextkf').disabled = !on;
     $('btn-export').disabled = !on;
     $('btn-save').disabled = !on;
+    $('btn-set-keys').classList.toggle('hidden', !on);
     $('video-placeholder').style.display = on ? 'none' : 'flex';
   },
 
@@ -2864,6 +2885,7 @@ guardTarget(t) {
   
   
   async openFile() {
+    if (this._convertState === 'analyzing' || this._convertState === 'converting') return;
     const p = await window.keycut.openFile();
     if (!p) return;
     await this.openPath(p);
@@ -2913,7 +2935,7 @@ guardTarget(t) {
     this.state.source = path;
     window.keycut.lockSource(path);
     this.state.projectPath = null;
-    this._videoSize = null;
+    this._videoSize = { width: meta.width, height: meta.height };
     this.cancelSkipMute();
     this.stopPlaybackGuard();
     this.cancelStepPause();
@@ -2926,6 +2948,10 @@ guardTarget(t) {
     if (this.scrubAudio) { this.scrubAudio.src = toFileUrl(path); this.scrubAudio.load(); }
     this.state.dirty = false;
     this.$labelUpdate();
+    if (!this._skipFitWindow) {
+      try { await this.fitWindowToVideo(); } catch {}
+      this._skipFitWindow = true;
+    }
     this.applyVideoMeta(meta);
     this.setStatus('Loaded: ' + path);
   },
@@ -3464,6 +3490,7 @@ releaseFrameNav() {
   },
 
   async saveProject() {
+    if (this._convertState === 'analyzing' || this._convertState === 'converting') return;
     if (!this.state.source) { this.setStatus('Nothing to save'); return; }
     let filePath = this.state.projectPath;
     if (!filePath) {
@@ -3471,6 +3498,11 @@ releaseFrameNav() {
       filePath = await window.keycut.saveProjectDialog(base);
       if (!filePath) return;
     }
+    await this.saveProjectTo(filePath);
+  },
+
+  async saveProjectTo(filePath) {
+    if (!filePath) return;
     const data = {
       src: this.state.source,
       video: {
@@ -3500,6 +3532,8 @@ releaseFrameNav() {
       this.$labelUpdate();
       this.setStatus('Project saved: ' + filePath);
     } else {
+      this.state.dirty = true;
+      this.$labelUpdate();
       this.setStatus('Save failed: ' + (res && res.error));
     }
   },
@@ -3681,6 +3715,7 @@ releaseFrameNav() {
   },
 
   async export() {
+    if (this._convertState === 'analyzing' || this._convertState === 'converting') return;
     if (this.state.exporting) return;
     const runs = this.exportableRuns();
     if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
@@ -3730,6 +3765,7 @@ releaseFrameNav() {
   },
 
   async exportParts() {
+    if (this._convertState === 'analyzing' || this._convertState === 'converting') return;
     if (this.state.exporting) return;
     const runs = this.exportableRuns();
     if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
@@ -3831,6 +3867,230 @@ releaseFrameNav() {
     } else {
       this.setStatus('Export failed: ' + lastErr);
     }
+  },
+
+  setKeys() {
+    if (!this.state.source) return;
+    if (this.video && !this.video.paused) this.pause();
+    this._convertState = 'analyzing';
+    this._convertCancelled = false;
+    this._convertOutPath = null;
+    this._convertReq = (this._convertReq || 0) + 1;
+    $('convert-modal').classList.remove('hidden');
+    $('convert-modal-message').textContent = 'Analyzing video…';
+    $('convert-modal-bar').style.display = '';
+    $('convert-modal-fill').style.display = '';
+    $('convert-modal-fill').style.width = '0%';
+    $('convert-modal-fill').classList.add('indeterminate');
+    $('convert-cancel').textContent = 'Cancel';
+    $('convert-cancel').style.display = '';
+    $('convert-place').style.display = 'none';
+    $('convert-action').style.display = 'none';
+    this.setConvertUIEnabled(false);
+    this.runConvertAnalysis(this._convertReq);
+  },
+
+  async runConvertAnalysis(req) {
+    const unsub = window.keycut.onConvertAnalyzeProgress((p) => {
+      if (this._convertState !== 'analyzing' || req !== this._convertReq) return;
+      if (p.progress != null) {
+        $('convert-modal-fill').classList.remove('indeterminate');
+        $('convert-modal-fill').style.width = Math.round(p.progress * 100) + '%';
+      }
+    });
+    const res = await window.keycut.convertAnalyze({
+      src: this.state.source,
+      duration: this.state.duration
+    });
+    unsub();
+    if (this._convertState !== 'analyzing' || req !== this._convertReq) return;
+    this.setConvertUIEnabled(true);
+    $('convert-modal-fill').classList.remove('indeterminate');
+    if (!res || !res.ok) {
+      this._convertState = 'error';
+      $('convert-modal-bar').style.display = 'none';
+      $('convert-modal-message').textContent = res && res.error ? res.error : 'Analysis failed';
+      $('convert-cancel').style.display = 'none';
+      $('convert-place').style.display = 'none';
+      $('convert-action').textContent = 'Close';
+      $('convert-action').title = 'Close';
+      $('convert-action').style.display = '';
+      return;
+    }
+    this._convertState = 'ready';
+    $('convert-modal-bar').style.display = 'none';
+    $('convert-place').style.display = 'none';
+    if (res.enough) {
+      $('convert-modal-message').textContent = 'This video has approximately ' + res.avg.toFixed(1) + ' keyframes/sec on average. It already has enough keyframes for precise cutting.';
+      $('convert-action').textContent = 'Convert anyway';
+      $('convert-action').title = 'Convert anyway';
+    } else {
+      $('convert-modal-message').textContent = 'The output file will be significantly larger than the original.';
+      $('convert-action').textContent = 'Convert';
+      $('convert-action').title = 'Convert';
+    }
+    $('convert-cancel').style.display = '';
+    $('convert-action').style.display = '';
+  },
+
+  convertAction() {
+    if (this._convertState === 'ready') {
+      this.startConversion();
+    } else if (this._convertState === 'error') {
+      this.closeConvertModal();
+    } else if (this._convertState === 'done') {
+      this.placeVideo(true);
+    }
+  },
+
+  async startConversion() {
+    this._convertState = 'converting';
+    this._convertCancelled = false;
+    $('convert-modal-message').textContent = 'Encoding…';
+    $('convert-modal-fill').style.display = '';
+    $('convert-modal-fill').classList.remove('indeterminate');
+    $('convert-modal-fill').style.width = '0%';
+    $('convert-modal-bar').style.display = '';
+    $('convert-cancel').style.display = '';
+    $('convert-place').style.display = 'none';
+    $('convert-action').style.display = 'none';
+    this.setConvertUIEnabled(false);
+    const unsub = window.keycut.onConvertProgress((p) => {
+      if (p.progress != null && this._convertState === 'converting') {
+        $('convert-modal-fill').style.width = Math.round(p.progress * 100) + '%';
+      }
+    });
+    const res = await window.keycut.convertStart({
+      src: this.state.source,
+      duration: this.state.duration
+    });
+    unsub();
+    if (this._convertState !== 'converting') return;
+    this.setConvertUIEnabled(true);
+    if (!res || !res.ok) {
+      this._convertState = 'error';
+      $('convert-modal-bar').style.display = 'none';
+      $('convert-modal-message').textContent = res && res.error ? res.error : 'Conversion failed';
+      $('convert-cancel').style.display = 'none';
+      $('convert-place').style.display = 'none';
+      $('convert-action').textContent = 'Close';
+      $('convert-action').title = 'Close';
+      $('convert-action').style.display = '';
+      return;
+    }
+    this._convertState = 'done';
+    this._convertOutPath = res.out;
+    $('convert-modal-fill').style.width = '100%';
+    $('convert-modal-message').textContent = 'Conversion complete.';
+    $('convert-cancel').textContent = 'Cancel';
+    $('convert-cancel').style.display = '';
+    $('convert-place').textContent = 'Place';
+    $('convert-place').title = 'Place keyframed video without saving';
+    $('convert-place').style.display = '';
+    $('convert-action').textContent = 'Place and save';
+    $('convert-action').title = 'Place keyframed video and save project';
+    $('convert-action').style.display = '';
+  },
+
+  placeVideo(save) {
+    if (!this._convertOutPath) return;
+    const out = this._convertOutPath;
+    const cuts = this.model ? this.model.cuts.slice() : [];
+    const deleted = this.model ? this.model.deleted.slice() : [];
+    const markers = this.timeline && this.timeline.markers ? this.timeline.markers.map((m) => ({ ...m })) : [];
+    const cursor = this.state.cursor;
+    const pps = this.timeline ? this.timeline.pxPerSec : null;
+    const vstart = this.timeline ? this.timeline.viewStart : null;
+    this.closeConvertModal();
+    this.loadPlacedVideo(out, cuts, deleted, markers, cursor, pps, vstart, () => {
+      if (save) this.savePlacedProject();
+    });
+  },
+
+  savePlacedProject() {
+    let filePath = this.state.projectPath;
+    if (!filePath) {
+      const src = this.state.source;
+      if (src) filePath = src.replace(/\.[^.]+$/, '') + '.kc';
+    }
+    if (filePath) this.saveProjectTo(filePath);
+  },
+
+  async loadPlacedVideo(path, cuts, deleted, markers, cursor, pps, vstart, afterLoad) {
+    this.setStatus('Analyzing…', true);
+    const meta = await window.keycut.probeVideo(path);
+    this.setStatus('Analyzing…', false);
+    if (!meta || meta.error) {
+      this.setStatus('Error: ' + (meta && meta.error ? meta.error : 'failed to analyze converted video'));
+      return;
+    }
+    const oldDuration = this.state.duration;
+    const durOk = Math.abs(oldDuration - meta.duration) < 0.05;
+    this.state.source = path;
+    window.keycut.lockSource(path);
+    this._videoSize = null;
+    this.cancelSkipMute();
+    this.stopPlaybackGuard();
+    this.cancelStepPause();
+    const tl = this.timeline;
+    this.model.clearHistory();
+    if (durOk) {
+      this.model.cuts = cuts;
+      this.model.deleted = deleted;
+      this.model.duration = oldDuration;
+    } else {
+      this.model.reset(meta.duration);
+    }
+    this.video.src = toFileUrl(path);
+    this.video.load();
+    if (this.scrubAudio) { this.scrubAudio.src = toFileUrl(path); this.scrubAudio.load(); }
+    this.state.dirty = false;
+    this.$labelUpdate();
+    this.applyVideoMeta(meta);
+    tl.markers = (markers || []).map((m) => ({ id: ++tl._markerSeq, t: m.t, name: m.name || '', color: m.color || '#7bd88f', off: !!m.off }));
+    if (Number.isFinite(pps) && pps > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(ZOOM_MAX, pps));
+    if (Number.isFinite(vstart)) tl.viewStart = vstart;
+    this.syncExportButton();
+    const c = Math.min(Math.max(0, cursor || 0), meta.duration);
+    this.seek(c);
+    tl.cursor = c;
+    tl.clampView();
+    tl.needsRender = true;
+    tl.tick();
+    this.model.snapshot();
+    this.state.dirty = false;
+    this.$labelUpdate();
+    this.updateStats();
+    this.setStatus('Loaded: ' + path);
+    if (afterLoad) afterLoad();
+  },
+
+  cancelConvert() {
+    const cs = this._convertState;
+    if (cs === 'analyzing' || cs === 'converting') {
+      this._convertCancelled = true;
+      window.keycut.convertCancel();
+      this.setConvertUIEnabled(true);
+    } else if (cs === 'done') {
+      const out = this._convertOutPath;
+      if (out) window.keycut.convertRemoveOutput({ out });
+    }
+    this.closeConvertModal();
+  },
+
+  closeConvertModal() {
+    $('convert-modal').classList.add('hidden');
+    this._convertState = null;
+    this._convertCancelled = false;
+    this._convertOutPath = null;
+  },
+
+  setConvertUIEnabled(on) {
+    $('btn-open').disabled = !on;
+    $('btn-save').disabled = !on;
+    $('btn-export').disabled = !on;
+    $('btn-set-keys').disabled = !on;
+    if (this.video && !on && !this.video.paused) this.pause();
   }
 };
 

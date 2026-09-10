@@ -16,40 +16,41 @@
         <div id="video-placeholder">
           <div class="placeholder-icon"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M8.5 6 L19 12 L8.5 18 Z" fill="currentColor" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg></div>
           <div class="placeholder-text">Open a video to start editing</div>
-          <button id="btn-open2" class="toolbar-btn primary" title="Open file (Ctrl+O)">Open File</button>
+          <button id="btn-open2" class="btn btn--primary" title="Open file (Ctrl+O)">Open File</button>
         </div>
       </div>
       <div id="player-controls">
         <div id="time-display"><span id="time-current">00:00:00.000</span><span class="sep">/</span><span id="time-total">00:00:00.000</span><span id="time-pct"></span></div>
         <div class="spacer"></div>
         <div class="transport">
-          <button id="btn-start" class="ctrl-btn" title="To start of project ([)">
+          <button id="btn-start" class="icon-btn icon-btn--round icon-btn--lg" title="To start of project ([)">
             <svg viewBox="0 0 24 24" width="17" height="17"><line x1="4" y1="6" x2="4" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18 6 L12 12 L18 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 6 L7 12 L13 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-prevblock" class="ctrl-btn" title="Previous block (Shift+S)">
+          <button id="btn-prevblock" class="icon-btn icon-btn--round icon-btn--lg" title="Previous block (Shift+S)">
             <svg viewBox="0 0 24 24" width="17" height="17"><path d="M16 6 L10 12 L16 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 6 L5 12 L11 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-prevkf" class="ctrl-btn" title="Previous keyframe (S / &larr;)">
+          <button id="btn-prevkf" class="icon-btn icon-btn--round icon-btn--lg" title="Previous keyframe (S / &larr;)">
             <svg viewBox="0 0 24 24" width="17" height="17"><path d="M14.5 6 L8.5 12 L14.5 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-play" class="ctrl-btn play-btn" title="Play / Pause (Space)">
+          <button id="btn-play" class="icon-btn icon-btn--round icon-btn--lg icon-btn--primary" title="Play / Pause (Space)">
             <svg viewBox="0 0 24 24" width="17" height="17"><path d="M8.5 6 L19 12 L8.5 18 Z" fill="currentColor" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-nextkf" class="ctrl-btn" title="Next keyframe (F / &rarr;)">
+          <button id="btn-nextkf" class="icon-btn icon-btn--round icon-btn--lg" title="Next keyframe (F / &rarr;)">
             <svg viewBox="0 0 24 24" width="17" height="17"><path d="M9.5 6 L15.5 12 L9.5 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-nextblock" class="ctrl-btn" title="Next block (Shift+F)">
+          <button id="btn-nextblock" class="icon-btn icon-btn--round icon-btn--lg" title="Next block (Shift+F)">
             <svg viewBox="0 0 24 24" width="17" height="17"><path d="M8 6 L14 12 L8 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 6 L19 12 L13 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-end" class="ctrl-btn" title="To end of project (])">
+          <button id="btn-end" class="icon-btn icon-btn--round icon-btn--lg" title="To end of project (])">
             <svg viewBox="0 0 24 24" width="17" height="17"><line x1="20" y1="6" x2="20" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M6 6 L12 12 L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 6 L17 12 L11 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
         <div class="action-buttons">
-          <button id="btn-open" class="toolbar-btn compact" title="Open file (Ctrl+O)">Open</button>
-          <button id="btn-save" class="toolbar-btn compact" title="Save project (Ctrl+S)">Save</button>
-          <button id="btn-export" class="toolbar-btn compact primary" title="Export lossless (Ctrl+E)">Export</button>
-          <button id="btn-export-parts" class="toolbar-btn compact primary" title="Export each marker part to a file (Ctrl+Shift+E)" disabled>Multiexport</button>
+          <button id="btn-open" class="btn btn--sm" title="Open file (Ctrl+O)">Open</button>
+          <button id="btn-save" class="btn btn--sm" title="Save project (Ctrl+S)">Save</button>
+          <button id="btn-set-keys" class="btn btn--sm btn--accent hidden" title="Re-encode with frequent keyframes">Set keys</button>
+          <button id="btn-export" class="btn btn--sm btn--primary" title="Export lossless (Ctrl+E)">Export</button>
+          <button id="btn-export-parts" class="btn btn--sm btn--primary" title="Export each marker part to a file (Ctrl+Shift+E)" disabled>Multiexport</button>
         </div>
       </div>
     </section>
@@ -58,13 +59,13 @@
       <div id="timeline-wrap">
         <canvas id="timeline"></canvas>
         <div id="marker-bubble" class="hidden">
-          <input id="marker-name" type="text" spellcheck="false" maxlength="80" />
-          <div id="marker-warn" class="hidden">Name already used by another marker</div>
-          <div class="marker-bubble-actions">
-            <button id="marker-delete" type="button" title="Delete marker">Del</button>
-            <button id="marker-export" type="button" title="Export this part to a file">Export</button>
-            <button id="marker-off" type="button" title="Disable this part for export">Off</button>
-            <button id="marker-ok" type="button">Ok</button>
+          <input id="marker-name" class="field" type="text" spellcheck="false" maxlength="80" />
+          <div id="marker-warn" class="warn hidden">Name already used by another marker</div>
+          <div class="btn-group btn-group--fill">
+            <button id="marker-delete" class="btn btn--xs btn--block btn--danger" type="button" title="Delete marker">Del</button>
+            <button id="marker-export" class="btn btn--xs btn--block btn--accent" type="button" title="Export this part to a file">Export</button>
+            <button id="marker-off" class="btn btn--xs btn--block btn--success" type="button" title="Disable this part for export">Off</button>
+            <button id="marker-ok" class="btn btn--xs btn--block btn--primary" type="button">Ok</button>
           </div>
           <div id="marker-bubble-arrow"></div>
         </div>
@@ -92,8 +93,8 @@
 
   <footer id="statusbar">
     <div id="status-text">Ready</div>
-    <div id="progress-wrap" class="hidden">
-      <div id="progress-bar"></div>
+    <div id="progress-wrap" class="progress-track hidden">
+      <div id="progress-bar" class="progress-fill"></div>
     </div>
     <div id="spinner" class="hidden"></div>
     <div id="statusbar-hints">
@@ -102,23 +103,36 @@
       <span class="hint"><kbd>E</kbd> Merge</span>
       <span class="hint"><kbd>S</kbd><kbd>F</kbd> Frame</span>
       <span class="hint"><kbd>Ctrl+E</kbd> Export · <kbd>Ctrl+Shift+E</kbd> Multiexport</span>
-      <button id="btn-help" class="help-btn" title="Keyboard shortcuts">
+      <button id="btn-help" class="icon-btn icon-btn--round icon-btn--xs" title="Keyboard shortcuts">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </button>
     </div>
   </footer>
 
-  <div id="export-modal" class="hidden">
-    <div id="export-modal-card">
-      <div id="export-modal-title">Export</div>
-      <div id="export-modal-bar"><div id="export-modal-fill"></div></div>
-      <div id="export-modal-status">Preparing…</div>
+  <div id="export-modal" class="modal hidden">
+    <div id="export-modal-card" class="modal-card">
+      <div id="export-modal-title" class="modal-title">Export</div>
+      <div id="export-modal-bar" class="progress-track"><div id="export-modal-fill" class="progress-fill"></div></div>
+      <div id="export-modal-status" class="modal-text">Preparing…</div>
     </div>
   </div>
 
-  <div id="help-modal" class="hidden">
-    <div id="help-modal-card">
-      <div id="help-modal-title">Keyboard Shortcuts</div>
+  <div id="convert-modal" class="modal hidden">
+    <div id="convert-modal-card" class="modal-card">
+      <div id="convert-modal-title" class="modal-title">Set keys</div>
+      <div id="convert-modal-message" class="modal-text"></div>
+      <div id="convert-modal-bar" class="progress-track"><div id="convert-modal-fill" class="progress-fill"></div></div>
+      <div id="convert-modal-buttons" class="btn-group btn-group--end">
+        <button id="convert-cancel" class="btn btn--sm btn--danger" title="Cancel">Cancel</button>
+        <button id="convert-place" class="btn btn--sm btn--accent" title="Place keyframed video without saving">Place</button>
+        <button id="convert-action" class="btn btn--sm btn--primary" title="Convert"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help-modal" class="modal hidden">
+    <div id="help-modal-card" class="modal-card">
+      <div id="help-modal-title" class="modal-title">Keyboard Shortcuts</div>
       <div id="help-modal-body">
         <div class="shortcut-group g-playback">
           <div class="shortcut-group-title">Playback &amp; Navigation</div>
@@ -141,25 +155,25 @@
           <div class="shortcut-row"><span class="desc">Add / remove marker</span><span class="keys">Middle click</span></div>
         </div>
       </div>
-      <button id="help-modal-close">Close</button>
+      <button id="help-modal-close" class="btn">Close</button>
     </div>
   </div>
 
   <div id="find-bar" class="hidden">
-    <input id="find-input" type="text" placeholder="Find marker…" spellcheck="false" />
-    <button id="find-prev" type="button" disabled>&#8592;</button>
-    <button id="find-next" type="button" disabled>&#8594;</button>
+    <input id="find-input" class="field" type="text" placeholder="Find marker…" spellcheck="false" />
+    <button id="find-prev" class="btn btn--ghost btn--sm" type="button" disabled>&#8592;</button>
+    <button id="find-next" class="btn btn--ghost btn--sm" type="button" disabled>&#8594;</button>
     <span id="find-count" class="find-count"></span>
   </div>
 
-  <div id="locate-modal" class="hidden">
-    <div id="locate-modal-card">
-      <div id="locate-modal-title">Source file not found</div>
-      <div id="locate-modal-msg">The project references <b id="locate-name"></b>, which is missing. Choose the original file or drop it onto the window.</div>
+  <div id="locate-modal" class="modal hidden">
+    <div id="locate-modal-card" class="modal-card">
+      <div id="locate-modal-title" class="modal-title">Source file not found</div>
+      <div id="locate-modal-msg" class="modal-text">The project references <b id="locate-name"></b>, which is missing. Choose the original file or drop it onto the window.</div>
       <button id="locate-choose" type="button"><span id="locate-choose-label">Choose file</span><span id="locate-spinner" class="hidden"></span></button>
       <div id="locate-path" class="locate-path"></div>
-      <div class="locate-actions">
-        <span id="locate-warn" class="hidden">This is not the right file</span>
+      <div class="btn-group btn-group--end locate-actions">
+        <span id="locate-warn" class="warn hidden">This is not the right file</span>
       </div>
     </div>
   </div>
