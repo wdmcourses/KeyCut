@@ -55,7 +55,7 @@ const COLORS = {
   selectionKept: '#ffffff',
   selectionGray: '#d8dee6',
   resizeHandle: 'rgba(255,255,255,0.95)',
-  activeSeg: 'rgba(255,255,255,0.95)',
+  activeSeg: 'rgba(255,255,255,0.9)',
   activeSegGlow: 'rgba(255,255,255,0.5)',
   hatch: 'rgba(215,224,232,0.12)',
   rulerBg: '#15171b',
@@ -1492,8 +1492,8 @@ toggleSelectSegment(i) {
     if (!cuts) return;
     const idx = this.selectionIndices();
     if (!idx.length) return;
-    const top = SEG.y;
-    const bottom = SEG.y + SEG.h;
+    const top = SEG.y + 1;
+    const bottom = SEG.y + SEG.h - 1;
     for (const i of idx) {
       if (i < 0 || i >= cuts.length - 1) continue;
       const x0 = this.timeToX(cuts[i]);
@@ -1503,7 +1503,7 @@ toggleSelectSegment(i) {
       ctx.save();
       ctx.fillStyle = gray ? 'rgba(216,222,230,0.14)' : 'rgba(255,255,255,0.20)';
       ctx.beginPath();
-      ctx.roundRect(x0, top, Math.max(0, x1 - x0), bottom - top, [0, 0, SEG_RADIUS, SEG_RADIUS]);
+      ctx.roundRect(x0, top, Math.max(0, x1 - x0), bottom - top, [SEG_RADIUS, SEG_RADIUS, SEG_RADIUS, SEG_RADIUS]);
       ctx.fill();
       ctx.strokeStyle = gray ? COLORS.selectionGray : COLORS.selectionKept;
       ctx.lineWidth = 2;
@@ -1545,8 +1545,8 @@ toggleSelectSegment(i) {
     const x0 = this.timeToX(cuts[i]);
     const x1 = this.timeToX(cuts[i + 1]);
     if (x1 < 0 || x0 > this.w) return;
-    const top = SEG.y;
-    const bottom = SEG.y + SEG.h;
+    const top = SEG.y + 2;
+    const bottom = SEG.y + SEG.h - 1;
     const rl = this.radiusAt(cuts[i]);
     const rr = this.radiusAt(cuts[i + 1]);
     ctx.save();
@@ -1555,7 +1555,7 @@ toggleSelectSegment(i) {
     ctx.shadowColor = COLORS.activeSegGlow;
     ctx.shadowBlur = 12;
     ctx.beginPath();
-    ctx.roundRect(x0, top, x1 - x0, bottom - top, [0, 0, rr, rl]);
+    ctx.roundRect(x0, top, x1 - x0, bottom - top, [rl, rr, rr, rl]);
     ctx.stroke();
     ctx.restore();
   }
@@ -1585,7 +1585,7 @@ toggleSelectSegment(i) {
       const deleted = model.deleted[i];
       const rl = this.radiusAt(cuts[i]);
       const rr = this.radiusAt(cuts[i + 1]);
-      const radii = [0, 0, rr, rl];
+      const radii = [rl, rr, rr, rl];
       ctx.beginPath();
       ctx.roundRect(x0, y, x1 - x0, h, radii);
       if (deleted) {
