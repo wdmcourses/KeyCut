@@ -354,7 +354,7 @@ const SCROLLBAR = {
 };
 const RESIZE_TOL_PX = 7;
 const WHEEL_LINE_PX = 40;          
-const WHEEL_STEP_FRACTION = 0.35;  
+const WHEEL_STEP_FRACTION = 0.12;  
 const RENDER_CAP = 4000;           
 const CARET_UPDATE_MS = 0.004;     
 const DUR_EXTEND_MARGIN = 0.05;    
@@ -618,6 +618,7 @@ class Timeline {
     window.addEventListener('mousemove', (e) => this.onMove(e));
     window.addEventListener('mouseup', (e) => this.onUp(e));
     this.canvas.addEventListener('mouseleave', () => {
+      if (this.canvas.title) this.canvas.title = '';
       if (this.hoverX != null) {
         this.hoverX = null;
         this.needsRender = true;
@@ -1147,12 +1148,18 @@ toggleSelectSegment(i) {
     const x = e.clientX - rect.left;
     this.hoverX = x;
     if (!this.drag) {
-      
-      const rk = (this.ctrlHeld && this.regionAt(e.clientY - rect.top) === 'seg') ? this.resizeBoundaryAt(x) : null;
-      let cur = 'default';
-      if (rk != null) cur = 'ew-resize';
-      else if (this.regionAt(e.clientY - rect.top) === 'mark' && this.markerAtX(x)) cur = 'pointer';
-      this.canvas.style.cursor = cur;
+      const region = this.regionAt(e.clientY - rect.top);
+      const isMark = region === 'mark';
+      const hm = isMark ? this.markerAtX(x) : null;
+      const rk = (this.ctrlHeld && region === 'seg') ? this.resizeBoundaryAt(x) : null;
+      if (hm) {
+        this.canvas.title = hm.name;
+        this.canvas.style.cursor = 'pointer';
+      } else if (this.canvas.title) {
+        this.canvas.title = '';
+      }
+      if (rk != null) this.canvas.style.cursor = 'ew-resize';
+      else if (!hm) this.canvas.style.cursor = 'default';
       this.needsRender = true;
       this.tick();
       return;
@@ -1358,7 +1365,7 @@ toggleSelectSegment(i) {
       
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
+      const factor = e.deltaY < 0 ? 1.4 : 1 / 1.4;
       this.zoomAt(x, factor);
       return;
     }
@@ -3431,8 +3438,8 @@ frameDeleted(t) {
     if (!markers.length) { this.seekTo(0); return; }
     const t = this.state.cursor;
     let best = null;
-    for (const m of markers) if (m.t < t - 1e-6) best = m.t; else break;
-    if (best != null) this.seekToMarker(best);
+    for (const m of markers) if (m.t < t - 1e-6) best = m; else break;
+    if (best != null) this.navigateToMarker(best);
     else this.seekTo(0);
   },
 
@@ -3441,8 +3448,8 @@ frameDeleted(t) {
     if (!markers.length) { this.seekTo(this.state.duration); return; }
     const t = this.state.cursor;
     let best = null;
-    for (const m of markers) if (m.t > t + 1e-6) { best = m.t; break; }
-    if (best != null) this.seekToMarker(best);
+    for (const m of markers) if (m.t > t + 1e-6) { best = m; break; }
+    if (best != null) this.navigateToMarker(best);
     else this.seekTo(this.state.duration);
   },
 
