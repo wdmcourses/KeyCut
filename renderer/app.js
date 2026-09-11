@@ -1897,7 +1897,9 @@ const app = {
       compress: false,
       resolution: 'origin',
       blocks: false
-    }
+    },
+    _exportMode: 'project',
+    _segmentMarkerId: null
   },
 
   init() {
@@ -1993,13 +1995,16 @@ const app = {
     $('marker-name').addEventListener('keydown', (e) => {
       if (e.code === 'Enter' || e.code === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         this.hideMarkerBubble();
       } else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
         e.preventDefault();
+        e.stopPropagation();
         if (e.shiftKey) this.redo();
         else this.undo();
       } else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY') {
         e.preventDefault();
+        e.stopPropagation();
         this.redo();
       }
     });
@@ -2012,7 +2017,7 @@ const app = {
     $('marker-export').addEventListener('click', () => {
       const id = this._markerBubbleId;
       this.hideMarkerBubble();
-      this.exportMarkerPart(id);
+      this.openSegmentExport(id);
     });
     $('marker-off').addEventListener('click', () => {
       const id = this._markerBubbleId;
@@ -2036,12 +2041,14 @@ const app = {
     $('find-input').addEventListener('keydown', (e) => {
       if (e.code === 'Enter') {
         e.preventDefault();
+        e.stopPropagation();
         const dir = e.shiftKey ? -1 : 1;
         if (!this._findResults || !this._findResults.length) this.findLive();
         else if (this._findDone) this.findNav(dir);
         else this.findDo();
       } else if (e.code === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         const hm = $('help-modal');
         if (hm && !hm.classList.contains('hidden')) { hm.classList.add('hidden'); return; }
         this.closeFind();
@@ -2159,8 +2166,8 @@ const app = {
       const f = Math.exp((zr.value / 100) * Math.log(20000));
       this.timeline.setZoom(f);
     });
-    $('btn-zoom-in').addEventListener('click', () => { zr.value = Math.min(100, +zr.value + 8); zr.dispatchEvent(new Event('input')); });
-    $('btn-zoom-out').addEventListener('click', () => { zr.value = Math.max(0, +zr.value - 8); zr.dispatchEvent(new Event('input')); });
+    $('btn-zoom-in').addEventListener('click', () => { zr.value = Math.min(100, +zr.value + 100 / 10); zr.dispatchEvent(new Event('input')); });
+    $('btn-zoom-out').addEventListener('click', () => { zr.value = Math.max(0, +zr.value - 100 / 10); zr.dispatchEvent(new Event('input')); });
     this.buildFitButtons();
 
     window.addEventListener('resize', () => {
@@ -2363,8 +2370,13 @@ guardTarget(t) {
 
   bindKeys() {
     window.addEventListener('keydown', (e) => {
-      if (e.target && e.target.tagName === 'INPUT') return;
+      if (e.target && e.target.tagName === 'INPUT') {
+        const mod = e.ctrlKey || e.metaKey;
+        const appHot = mod && !e.altKey && (e.code === 'KeyO' || e.code === 'KeyS' || e.code === 'KeyE' || e.code === 'KeyF');
+        if (!appHot && !/^F\d+$/.test(e.code)) return;
+      }
       if (e.code === 'F1') { e.preventDefault(); this.toggleHelp(); return; }
+      if (e.code === 'F3') { e.preventDefault(); if (e.shiftKey) this.prevFind(); else this.nextFind(); return; }
       const cs = this._convertState;
       if (this.isModalOpen() || cs === 'analyzing' || cs === 'converting' || cs === 'done') {
         if (e.code === 'Escape') {
@@ -2418,6 +2430,14 @@ guardTarget(t) {
       if (e.code === 'BracketRight') { e.preventDefault(); this.navPause(() => this.endNav()); return; }
       if (e.code === 'Home') { e.preventDefault(); this.navPause(() => this.seekTo(0)); return; }
       if (e.code === 'End') { e.preventDefault(); this.navPause(() => this.seekTo(this.state.duration)); return; }
+      if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.code === 'Equal' || e.code === 'NumpadAdd') {
+        e.preventDefault();
+        const zr = $('zoom-range');
+        const out = e.code === 'Minus' || e.code === 'NumpadSubtract';
+        zr.value = Math.max(0, Math.min(100, +zr.value + (out ? -1 : 1) * 100 / 10));
+        zr.dispatchEvent(new Event('input'));
+        return;
+      }
       
       
       if (e.code === 'KeyS' || e.code === 'ArrowLeft') {
@@ -2518,18 +2538,23 @@ guardTarget(t) {
     $('btn-end').title = has ? 'Next marker' : 'Go to end of project';
   },
 
-  markersHaveContent() {
+  markerPartsWithContent() {
     const t = this.timeline;
-    if (!t || !t.markers || !t.markers.length || !this.model) return false;
+    if (!t || !t.markers || !t.markers.length || !this.model) return 0;
     const runs = this.exportableRuns();
     const markers = t.sortedMarkers();
     let prev = 0;
+    let count = 0;
     for (const m of markers) {
       if (m.off) { prev = m.t; continue; }
-      if (clipRuns(runs, prev, m.t).length) return true;
+      if (clipRuns(runs, prev, m.t).length) count++;
       prev = m.t;
     }
-    return false;
+    return count;
+  },
+
+  markersHaveContent() {
+    return this.markerPartsWithContent() > 0;
   },
 
   exportableRuns() {
@@ -2949,6 +2974,7 @@ guardTarget(t) {
 
   
   async handleCloseRequest() {
+    if (this.state.exporting) return;
     if (!this.state.dirty) { window.keycut.forceClose(); return; }
     const choice = await window.keycut.confirmClose();
     if (choice === 'save') {
@@ -2958,7 +2984,6 @@ guardTarget(t) {
     } else if (choice === 'discard') {
       window.keycut.forceClose();
     }
-    
   },
 
   async loadSource(path) {
@@ -3323,6 +3348,32 @@ frameDeleted(t) {
     $('find-bar').classList.remove('hidden');
     $('find-input').focus();
     $('find-input').select();
+  },
+
+  prevFind() {
+    if (this.isModalOpen()) return;
+    if (!$('find-bar').classList.contains('hidden')) {
+      if (!this._findResults || !this._findResults.length) this.findLive();
+      if (this._findResults && this._findResults.length) {
+        if (this._findDone) this.findNav(-1);
+        else this.findDo();
+      }
+      return;
+    }
+    this.toggleFind();
+  },
+
+  nextFind() {
+    if (this.isModalOpen()) return;
+    if (!$('find-bar').classList.contains('hidden')) {
+      if (!this._findResults || !this._findResults.length) this.findLive();
+      if (this._findResults && this._findResults.length) {
+        if (this._findDone) this.findNav(1);
+        else this.findDo();
+      }
+      return;
+    }
+    this.toggleFind();
   },
 
   closeFind() {
@@ -3773,14 +3824,34 @@ releaseFrameNav() {
     const runs = this.exportableRuns();
     if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
     const es = this.state.exportSettings;
+    this._exportMode = 'project';
+    this._segmentMarkerId = null;
+    $('export-settings-title').textContent = 'Export Project';
     $('export-blocks-separate').checked = !!es.blocks;
-    $('export-blocks-row').style.display = this.hasMarkers() ? '' : 'none';
+    $('export-blocks-row').style.display = this.markerPartsWithContent() >= 2 ? '' : 'none';
     $('export-compress-toggle').textContent = es.compress ? 'Compress: ON' : 'Compress: OFF';
     $('export-compress-toggle').classList.toggle('btn--primary', !!es.compress);
     $('export-resolution-row').classList.toggle('hidden', !es.compress);
     this.setExportResolution(es.resolution);
     this.openExportSettings();
     this.closeFind();
+  },
+
+  openSegmentExport(id) {
+    if (this._convertState === 'analyzing' || this._convertState === 'converting') return;
+    if (this.state.exporting) return;
+    const m = this.timeline.markers.find((x) => x.id === id);
+    if (!m) return;
+    const es = this.state.exportSettings;
+    this._exportMode = 'segment';
+    this._segmentMarkerId = id;
+    $('export-settings-title').textContent = 'Export Segment';
+    $('export-blocks-row').style.display = 'none';
+    $('export-compress-toggle').textContent = es.compress ? 'Compress: ON' : 'Compress: OFF';
+    $('export-compress-toggle').classList.toggle('btn--primary', !!es.compress);
+    $('export-resolution-row').classList.toggle('hidden', !es.compress);
+    this.setExportResolution(es.resolution);
+    this.openExportSettings();
   },
 
   openExportSettings() {
@@ -3824,6 +3895,13 @@ releaseFrameNav() {
   async doExport() {
     const es = this.state.exportSettings;
     const compressOpts = es.compress ? { compress: true, resolution: es.resolution } : null;
+    if (this._exportMode === 'segment') {
+      const id = this._segmentMarkerId;
+      this._exportMode = 'project';
+      this._segmentMarkerId = null;
+      await this.exportMarkerPart(id, compressOpts);
+      return;
+    }
     const blocks = es.blocks;
     if (blocks) await this.exportParts(compressOpts);
     else await this.exportSingle(compressOpts);
@@ -3857,7 +3935,7 @@ releaseFrameNav() {
     return ext;
   },
 
-  async exportMarkerPart(id) {
+  async exportMarkerPart(id, compressOpts) {
     if (this.state.exporting) return;
     const m = this.timeline.markers.find((x) => x.id === id);
     if (!m) return;
@@ -3869,14 +3947,15 @@ releaseFrameNav() {
     }
     const segs = clipRuns(this.model.keptRuns(), prev, m.t);
     if (!segs.length) { this.setStatus('This part contains no kept content'); return; }
-    const base = safeFileName(m.name || 'part') + this.sourceExt();
-    const outPath = await window.keycut.saveExportDialog(base);
+    const base = safeFileName(m.name || 'part') + (compressOpts ? '.mp4' : this.sourceExt());
+    const outPath = await window.keycut.saveExportDialog(base, compressOpts ? true : false);
     if (!outPath) return;
     if (this.isSourcePath(outPath)) {
       this.setStatus('Export cancelled: output file cannot overwrite the source "' + this.state.source.split(/[\\/]/).pop() + '"');
       return;
     }
-    await this.runExports([{ segments: segs, out: outPath }], false);
+    this.closeExportSettings();
+    await this.runExports([{ segments: segs, out: outPath }], false, compressOpts);
   },
 
   async exportParts(compressOpts) {
@@ -3951,7 +4030,7 @@ releaseFrameNav() {
     $('export-modal').classList.remove('hidden');
     this.closeFind();
     $('export-modal-title').textContent = 'Export' + (multi ? ' [1/' + jobs.length + ']' : '');
-    $('export-cancel').style.display = compressOpts ? '' : 'none';
+    $('export-cancel').style.display = '';
     $('export-modal-status').textContent = 'Preparing…';
 
     const setModalStatus = (s) => { $('export-modal-status').textContent = s; };
