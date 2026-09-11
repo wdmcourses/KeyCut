@@ -2390,7 +2390,7 @@ guardTarget(t) {
       if (mod && e.code === 'KeyO') { e.preventDefault(); this.openFile(); return; }
       if (mod && !e.shiftKey && e.code === 'KeyS') { e.preventDefault(); this.saveProject(); return; }
       if (mod && e.shiftKey && e.code === 'KeyS') { e.preventDefault(); this.navPause(() => this.homeNav()); return; }
-      if (mod && e.code === 'KeyE') {
+      if (mod && !e.shiftKey && e.code === 'KeyE') {
         e.preventDefault();
         this.export();
         return;
@@ -2996,7 +2996,7 @@ guardTarget(t) {
     
     const label = this.state.source ? this.state.source.split(/[\\/]/).pop() : '';
     const star = this.state.dirty ? '* ' : '';
-    document.title = star + (label ? 'KeyCut — ' + label : 'KeyCut');
+    document.title = star + (label ? 'KeyCut – ' + label : 'KeyCut');
   },
 
   
@@ -3303,7 +3303,7 @@ frameDeleted(t) {
     }
     const exists = await window.keycut.fileExists(this.state.source);
     if (!exists) {
-      this.setStatus('Source file is missing — open the video first');
+      this.setStatus('Source file is missing – open the video first');
       return;
     }
     if ($('find-bar').classList.contains('hidden')) this.openFind();

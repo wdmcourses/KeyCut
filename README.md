@@ -25,7 +25,7 @@ output keeps the original quality and the whole operation is fast.</p>
 - Split, delete, restore and merge segments directly on the timeline
 - Export the kept segments as a single file
 - Reads most container formats: MP4, MOV, MKV, WebM, AVI, TS/M2TS, FLV and more
-- Portable, no installation required — FFmpeg is bundled
+- Portable, no installation required – FFmpeg is bundled
 
 ## Keyboard
 
@@ -46,7 +46,6 @@ output keeps the original quality and the whole operation is fast.</p>
 | Ctrl+Shift+S / Ctrl+Shift+F | Previous / next marker (or start / end) |
 | Ctrl+F · Enter / Shift+Enter | Find marker · next / prev |
 | Ctrl+E | Export |
-| Ctrl+Shift+E | Export each marker part |
 
 ## Getting started
 
@@ -60,13 +59,13 @@ page. Download the archive, extract and run `KeyCut`.
   sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
   ```
 - **macOS:** the build is unsigned, so on first launch right-click `KeyCut.app` → **Open**, or run `xattr -cr KeyCut.app`
-- **Windows:** nothing to do — extract and run `KeyCut.exe`
+- **Windows:** nothing to do – extract and run `KeyCut.exe`
 
 ## Recording with OBS
 
 KeyCut cuts only at keyframes, so the more keyframes a file has, the closer a cut can land to the exact frame you want.
 
-In OBS, record with frequent keyframes: add `keyint=6` to the x264/x265 encoder options (or set a low keyframe interval) so a keyframe is written every 6 frames — about every 0.2 s at 30 fps or 0.1 s at 60 fps. This lets you cut with frame-level precision. The trade-off is a slightly larger recording, since every keyframe is an independently decodable frame.
+In OBS, record with frequent keyframes: add `keyint=6` to the x264/x265 encoder options (or set a low keyframe interval) so a keyframe is written every 6 frames – about every 0.2 s at 30 fps or 0.1 s at 60 fps. This lets you cut with frame-level precision. The trade-off is a slightly larger recording, since every keyframe is an independently decodable frame.
 
 ## Building from source
 
