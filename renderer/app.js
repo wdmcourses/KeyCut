@@ -3117,6 +3117,7 @@ guardTarget(t) {
   async handleCloseRequest() {
     if (this.state.exporting) return;
     if (this._concatBusy) return;
+    if (this._convertState === 'analyzing' || this._convertState === 'converting') return;
     if (this.taskModalOpen()) return;
     if (!this.state.dirty) { window.keycut.forceClose(); return; }
     const choice = await window.keycut.confirmClose();
@@ -4200,8 +4201,9 @@ releaseFrameNav() {
       const base = multiSpan < 1 ? curJob * multiSpan : 0;
       let local = 0;
       if (p.phase === 'cut') {
+        const cutPct = p.total > 0 ? Math.round(((p.index + 1) / p.total) * 100) : 0;
         local = (compressOpts ? 0.1 : 0.7) * (p.total > 0 ? p.index / p.total : 0);
-        setModalStatus('Muxing…');
+        setModalStatus('Muxing… ' + cutPct + '%');
       } else if (p.phase === 'concat') {
         local = compressOpts ? 0.1 : 1;
         this.setStatus('Exporting… muxing');
@@ -4587,8 +4589,11 @@ releaseFrameNav() {
     const unsub = window.keycut.onConvertAnalyzeProgress((p) => {
       if (this._convertState !== 'analyzing' || req !== this._convertReq) return;
       if (p.progress != null) {
+        const pct = Math.round(p.progress * 100);
         $('convert-modal-fill').classList.remove('indeterminate');
-        $('convert-modal-fill').style.width = Math.round(p.progress * 100) + '%';
+        $('convert-modal-fill').style.width = pct + '%';
+        const msgEl = $('convert-modal-message');
+        if (msgEl) msgEl.textContent = 'Analyzing… ' + pct + '%';
       }
     });
     const res = await window.keycut.convertAnalyze({
@@ -4637,7 +4642,10 @@ releaseFrameNav() {
     this.setConvertUIEnabled(false);
     const unsub = window.keycut.onConvertProgress((p) => {
       if (p.progress != null && this._convertState === 'converting') {
-        $('convert-modal-fill').style.width = Math.round(p.progress * 100) + '%';
+        const pct = Math.round(p.progress * 100);
+        $('convert-modal-fill').style.width = pct + '%';
+        const msgEl = $('convert-modal-message');
+        if (msgEl) msgEl.textContent = 'Encoding… ' + pct + '%';
       }
     });
     const res = await window.keycut.convertStart({
