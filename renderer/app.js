@@ -346,12 +346,13 @@ const ZOOM_MIN = 1;
 const ZOOM_MAX = 20000;
 const SCROLLBAR = {
   pad: 4,
-  thumbMin: 80,
+  thumbMin: 60,
   caret: 12,
   tol: 4,
   track: 19,
   inset: 3
 };
+const MAX_VIEW_SECONDS = 10;
 const RESIZE_TOL_PX = 7;
 const WHEEL_LINE_PX = 40;          
 const WHEEL_STEP_FRACTION = 0.12;  
@@ -683,7 +684,7 @@ class Timeline {
   fit() {
     if (this.duration <= 0) return;
     this.viewStart = 0;
-    this.pxPerSec = Math.min(ZOOM_MAX, this.w / this.duration);
+    this.pxPerSec = Math.min(this.maxZoom(), this.w / this.duration);
     this.clampView();
     if (this.onZoom) this.onZoom(this.pxPerSec);
   }
@@ -758,8 +759,10 @@ class Timeline {
 
       let mode = 'pan';
       let grabOff = 0;
-      if (x >= bodyL - tol && x <= bodyL + caret + tol) mode = 'left';
-      else if (x >= bodyR - caret - tol && x <= bodyR + tol) mode = 'right';
+      if (!this.atScrollMax()) {
+        if (x >= bodyL - tol && x <= bodyL + caret + tol) mode = 'left';
+        else if (x >= bodyR - caret - tol && x <= bodyR + tol) mode = 'right';
+      }
       if (x < bodyL - tol || x > bodyR + tol) return;
       app.beginDragCursor(mode === 'pan' ? 'grabbing' : 'ew-resize');
       if (mode === 'left') grabOff = x - bodyL;
@@ -768,28 +771,64 @@ class Timeline {
       const startView = this.viewStart;
       if (this.thumbEl) this.thumbEl.classList.add('dragging');
 
-      const move = (ev) => {
-        const nx = ev.clientX - rect.left;
-        if (mode === 'left') this.dragLeftEdge(nx - grabOff, barW);
-        else if (mode === 'right') this.dragRightEdge(nx + grabOff, barW);
-        else {
-          const u = Math.max(1, barW - 2 * SCROLLBAR.pad);
-          this.viewStart = startView + ((nx - startX) / u) * this.duration;
-          this.clampView();
-        }
+      let panX = x;
+      let lockSettled = false;
+
+      const applyPan = () => {
+        const u = Math.max(1, barW - 2 * SCROLLBAR.pad);
+        const viewW = this.w / this.pxPerSec;
+        this.viewStart = startView + ((panX - startX) / u) * viewW * 2.5;
+        this.clampView();
         this.needsRender = true;
         this.tick();
         this.updateScrollbar();
       };
+
+      const releaseLock = () => {
+        if (document.pointerLockElement) document.exitPointerLock();
+      };
+
       const up = () => {
+        releaseLock();
         this.updateScrollbar();
         if (this.thumbEl) this.thumbEl.classList.remove('dragging');
         app.endDragCursor();
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
+        window.removeEventListener('pointerlockchange', onLockChange);
+      };
+
+      const onLockChange = () => {
+        if (!document.pointerLockElement) up();
+      };
+
+      const move = (ev) => {
+        const nx = ev.clientX - rect.left;
+        if (mode === 'left') this.dragLeftEdge(nx - grabOff, barW);
+        else if (mode === 'right') this.dragRightEdge(nx + grabOff, barW);
+        else {
+          if (document.pointerLockElement === bar) {
+            if (!lockSettled) {
+              lockSettled = true;
+            } else {
+              panX += ev.movementX || 0;
+              applyPan();
+            }
+          } else {
+            panX = nx;
+            applyPan();
+          }
+        }
       };
       window.addEventListener('mousemove', move);
       window.addEventListener('mouseup', up);
+      window.addEventListener('pointerlockchange', onLockChange);
+      if (mode === 'pan' && bar.requestPointerLock) {
+        try {
+          const pr = bar.requestPointerLock();
+          if (pr && pr.catch) pr.catch(() => {});
+        } catch {}
+      }
     });
   }
 
@@ -797,24 +836,40 @@ class Timeline {
     return this.duration > 0 ? this.w / this.duration : ZOOM_MIN;
   }
 
+  maxZoom() {
+    if (!(this.duration > 0)) return ZOOM_MAX;
+    return Math.max(this.minZoom(), this.w / MAX_VIEW_SECONDS);
+  }
+
   minViewW() {
-    return this.w / ZOOM_MAX;
+    return this.w / this.maxZoom();
+  }
+
+  scrollMinViewW() {
+    if (!(this.duration > 0)) return 0;
+    const bw = this.scrollbarEl ? this.scrollbarEl.clientWidth : 0;
+    const u = Math.max(1, (bw > 0 ? bw : this.w) - 2 * SCROLLBAR.pad);
+    return (SCROLLBAR.thumbMin * this.duration) / u;
+  }
+
+  atScrollMax() {
+    return this.duration > 0 && (this.w / this.pxPerSec) <= this.scrollMinViewW() + 1e-6;
   }
 
   dragLeftEdge(x, barW) {
     const end = Math.min(this.viewEnd(), this.duration);
-    const leftT = Math.min(this.barTime(x, barW), end - this.minViewW());
-    const viewW = Math.max(this.minViewW(), end - leftT);
-    this.pxPerSec = Math.max(this.minZoom(), Math.min(ZOOM_MAX, this.w / viewW));
+    const leftT = Math.min(this.barTime(x, barW), end - this.scrollMinViewW());
+    const viewW = Math.max(this.scrollMinViewW(), end - leftT);
+    this.pxPerSec = Math.max(this.minZoom(), Math.min(this.maxZoom(), this.w / viewW));
     this.viewStart = end - viewW;
     this.clampView();
     if (this.onZoom) this.onZoom(this.pxPerSec);
   }
 
   dragRightEdge(x, barW) {
-    const rightT = Math.max(this.barTime(x, barW), this.viewStart + this.minViewW());
-    const viewW = Math.max(this.minViewW(), rightT - this.viewStart);
-    this.pxPerSec = Math.max(this.minZoom(), Math.min(ZOOM_MAX, this.w / viewW));
+    const rightT = Math.max(this.barTime(x, barW), this.viewStart + this.scrollMinViewW());
+    const viewW = Math.max(this.scrollMinViewW(), rightT - this.viewStart);
+    this.pxPerSec = Math.max(this.minZoom(), Math.min(this.maxZoom(), this.w / viewW));
     this.clampView();
     if (this.onZoom) this.onZoom(this.pxPerSec);
   }
@@ -825,6 +880,7 @@ class Timeline {
     const g = this.thumbVisual(barW);
     this.thumbEl.style.left = g.left + 'px';
     this.thumbEl.style.width = Math.max(0, g.right - g.left) + 'px';
+    if (this.scrollbarEl.classList) this.scrollbarEl.classList.toggle('sb-at-max', this.atScrollMax());
   }
 
   timeToX(t) { return (t - this.viewStart) * this.pxPerSec; }
@@ -832,7 +888,7 @@ class Timeline {
 
   
   setZoom(pps) {
-    const pps2 = Math.max(this.minZoom(), Math.min(ZOOM_MAX, pps));
+    const pps2 = Math.max(this.minZoom(), Math.min(this.maxZoom(), pps));
     if (this.duration <= 0) { this.pxPerSec = pps2; return; }
     const center = this.viewStart + this.w / (2 * this.pxPerSec);
     this.pxPerSec = pps2;
@@ -848,7 +904,7 @@ class Timeline {
   zoomAt(mx, factor) {
     const oldPPS = this.pxPerSec;
     const t = this.xToTime(mx);
-    this.pxPerSec = Math.max(this.minZoom(), Math.min(ZOOM_MAX, oldPPS * factor));
+    this.pxPerSec = Math.max(this.minZoom(), Math.min(this.maxZoom(), oldPPS * factor));
     this.viewStart = t - mx / this.pxPerSec;
     this.clampView();
     if (this.onZoom) this.onZoom(this.pxPerSec);
@@ -1087,8 +1143,12 @@ toggleSelectSegment(i) {
       }
       if (app.video && !app.video.paused) app.pause();
       const near = this.markerAt(x);
+      if (near && e.button !== 0) {
+        e.preventDefault();
+        return;
+      }
       if (near) {
-        this.drag = { mode: 'marker', id: near.id, lastX: x, x, y, region };
+        this.drag = { mode: 'marker', id: near.id, lastX: x, x, y, region, button: 0 };
         this.canvas.style.cursor = 'grabbing';
         this._markerToggleOff = bubbleWasOpen === near.id;
         if (this.onMarkerDragStart) this.onMarkerDragStart();
@@ -1171,7 +1231,7 @@ toggleSelectSegment(i) {
       this.clampView();
     } else if (this.drag.mode === 'resize') {
       this.resizeTo(this.drag.k, this.xToTime(x));
-    } else if (this.drag.mode === 'marker') {
+    } else if (this.drag.mode === 'marker' && this.drag.button === 0) {
       this.moveMarkerTo(this.drag.id, this.xToTime(x));
     } else {
       this.setCursor(this.xToTime(x));
@@ -1259,7 +1319,6 @@ toggleSelectSegment(i) {
     if (this.onMarkersChange) this.onMarkersChange();
   }
 
-  
   
   
   
@@ -2001,11 +2060,7 @@ const app = {
       scrollbar: $('timeline-scrollbar'),
       thumb: $('scrollbar-thumb')
     });
-    this.timeline.onZoom = (pps) => {
-      const zr = $('zoom-range');
-      const v = Math.round((Math.log(pps) / Math.log(20000)) * 100);
-      zr.value = Math.max(0, Math.min(100, v));
-    };
+    this.timeline.onZoom = () => this.syncZoomSlider();
     this.timeline.onScrub = (t) => this.scrubBlip(t);
     this.timeline.onScrubEnd = () => this.scrubEnd();
     this.timeline.onResize = () => { this.refreshActiveKeys(); this.updateStats(); };
@@ -2142,6 +2197,8 @@ const app = {
     window.addEventListener('dragover', (e) => e.preventDefault());
     window.addEventListener('dragenter', () => {
       depth++;
+      this.pause();
+      this.stopPlaybackGuard();
       const cm = $('concat-modal');
       if (cm && !cm.classList.contains('hidden')) cm.classList.add('drag-over');
       if (!this.isModalOpen()) document.body.classList.add('drag-over');
@@ -2198,6 +2255,8 @@ const app = {
       return;
     }
     if (this.isModalOpen()) { this.setStatus('Close the dialog to open a file'); return; }
+    this.pause();
+    this.stopPlaybackGuard();
     if (!await this.confirmDiscardIfDirty()) { this.setStatus('Open cancelled'); return; }
     this.scrubEnd();
     if (/\.kc$/i.test(p)) await this.openProjectFromPath(p);
@@ -2260,8 +2319,7 @@ const app = {
 
     const zr = $('zoom-range');
     zr.addEventListener('input', () => {
-      const f = Math.exp((zr.value / 100) * Math.log(20000));
-      this.timeline.setZoom(f);
+      this.timeline.setZoom(this.zoomFromSlider(+zr.value));
     });
     $('btn-zoom-in').addEventListener('click', () => { zr.value = Math.min(100, +zr.value + 100 / 10); zr.dispatchEvent(new Event('input')); });
     $('btn-zoom-out').addEventListener('click', () => { zr.value = Math.max(0, +zr.value - 100 / 10); zr.dispatchEvent(new Event('input')); });
@@ -2270,6 +2328,7 @@ const app = {
     window.addEventListener('resize', () => {
       clearTimeout(this._fitBtnTimer);
       this._fitBtnTimer = setTimeout(() => this.updateFitButtons(), 150);
+      this.syncZoomSlider();
     });
 
     
@@ -3085,6 +3144,25 @@ guardTarget(t) {
     }
   },
 
+  syncZoomSlider() {
+    const tl = this.timeline;
+    const zr = $('zoom-range');
+    if (!tl || !zr) return;
+    const lo = tl.minZoom();
+    const hi = tl.maxZoom();
+    if (!(lo > 0) || hi <= lo) { zr.value = 0; return; }
+    const v = Math.round((Math.log(tl.pxPerSec / lo) / Math.log(hi / lo)) * 100);
+    zr.value = Math.max(0, Math.min(100, v));
+  },
+
+  zoomFromSlider(v) {
+    const tl = this.timeline;
+    const lo = tl ? tl.minZoom() : ZOOM_MIN;
+    const hi = tl ? tl.maxZoom() : ZOOM_MAX;
+    if (!(lo > 0) || hi <= lo) return ZOOM_MAX;
+    return lo * Math.pow(hi / lo, Math.max(0, Math.min(100, v)) / 100);
+  },
+
   
   
   async openFile() {
@@ -3095,6 +3173,8 @@ guardTarget(t) {
   },
 
   async openPath(p) {
+    this.pause();
+    this.stopPlaybackGuard();
     if (!await this.confirmDiscardIfDirty()) return;
     if (/\.kc$/i.test(p)) await this.openProjectFromPath(p);
     else await this.loadSource(p);
@@ -3131,6 +3211,8 @@ guardTarget(t) {
   },
 
   async loadSource(path) {
+    this.pause();
+    this.stopPlaybackGuard();
     this.showTaskModal({ title: 'Open file', message: 'Analyzing…', indeterminate: true });
     const meta = await window.keycut.probeVideo(path);
     this.hideTaskModal();
@@ -3145,6 +3227,7 @@ guardTarget(t) {
     this._videoSize = { width: meta.width, height: meta.height };
     this.cancelSkipMute();
     this.stopPlaybackGuard();
+    this.pause();
     this.cancelStepPause();
     this.model.clearHistory();
     this.model.reset(meta.duration);
@@ -3947,8 +4030,9 @@ releaseFrameNav() {
         blocks: !!data.exportSettings.blocks
       };
     }
-    if (data.zoom > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(ZOOM_MAX, data.zoom));
+    if (data.zoom > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(tl.maxZoom(), data.zoom));
     if (typeof data.viewStart === 'number') tl.viewStart = data.viewStart;
+    this.syncZoomSlider();
     this.syncExportButton();
     const c = Math.min(Math.max(0, data.cursor || 0), duration);
     this.seek(c);
@@ -4711,6 +4795,7 @@ releaseFrameNav() {
     this._videoSize = null;
     this.cancelSkipMute();
     this.stopPlaybackGuard();
+    this.pause();
     this.cancelStepPause();
     const tl = this.timeline;
     this.model.clearHistory();
@@ -4730,8 +4815,9 @@ releaseFrameNav() {
     await this.applyVideoMeta(meta);
     this._loadingSrc = false;
     tl.markers = (markers || []).map((m) => ({ id: ++tl._markerSeq, t: m.t, name: m.name || '', color: m.color || '#7bd88f', off: !!m.off }));
-    if (Number.isFinite(pps) && pps > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(ZOOM_MAX, pps));
+    if (Number.isFinite(pps) && pps > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(tl.maxZoom(), pps));
     if (Number.isFinite(vstart)) tl.viewStart = vstart;
+    this.syncZoomSlider();
     this.syncExportButton();
     const c = Math.min(Math.max(0, cursor || 0), meta.duration);
     this.seek(c);

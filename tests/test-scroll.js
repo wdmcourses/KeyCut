@@ -18,6 +18,7 @@ app.whenReady().then(async () => {
   const esc = path.join(DIR, 'test.mp4').replace(/\\/g, '\\\\');
   await js(`window.__app.loadSource('${esc}')`);
   await new Promise((r) => setTimeout(r, 1200));
+  await js(`(() => { const T = window.__app.timeline; T.duration = 600; T.fit(); T.updateScrollbar(); })()`);
 
   console.log('[1] scrollbar');
   const sb = await js(`(() => {
@@ -70,7 +71,7 @@ app.whenReady().then(async () => {
     const bar = document.querySelector('#timeline-scrollbar');
     const barW = bar.clientWidth;
     const br = bar.getBoundingClientRect();
-    T.pxPerSec = 500;
+    T.pxPerSec = T.w / 100;
     T.clampView(); T.updateScrollbar();
     const left = T.scrollLeftPx(barW);
     const ppsBefore = T.pxPerSec;
@@ -100,40 +101,38 @@ app.whenReady().then(async () => {
     const bar = document.querySelector('#timeline-scrollbar');
     const barW = bar.clientWidth;
     const barRect = bar.getBoundingClientRect();
-    T.setZoom(20000);
+    T.setZoom(1e9);
     T.viewStart = T.duration - T.minViewW();
     T.clampView(); T.updateScrollbar();
     const thumb = document.querySelector('#scrollbar-thumb');
     const hL = document.querySelector('#scrollbar-handle-l');
     const hR = document.querySelector('#scrollbar-handle-r');
     const tRect = thumb.getBoundingClientRect();
-    const lRect = hL.getBoundingClientRect();
-    const rRect = hR.getBoundingClientRect();
     return {
       barW,
       thumbLeft: tRect.left - barRect.left,
       thumbRight: tRect.right - barRect.left,
-      earL: lRect.left - barRect.left,
-      earR: rRect.right - barRect.left,
       tw: tRect.width,
       minW: T.sb.thumbMin,
-      minEarSpan: 2 * T.sb.caret
+      atMax: bar.classList.contains('sb-at-max'),
+      earLVisible: getComputedStyle(hL).display !== 'none',
+      earRVisible: getComputedStyle(hR).display !== 'none'
     };
   })()`);
   check('no horizontal overflow (thumb right edge <= barW)', edge.thumbRight <= edge.barW + 0.01);
   check('thumb stays inside the track (left edge >= 0)', edge.thumbLeft >= -0.01);
   check('thumb is at least the min width', edge.tw >= edge.minW - 0.01);
-  check('left ear pinned to the thumb left edge', Math.abs(edge.earL - edge.thumbLeft) < 1.5);
-  check('right ear pinned to the thumb right edge', Math.abs(edge.earR - edge.thumbRight) < 1.5);
-  check('ears do not converge at max zoom', edge.earR - edge.earL >= edge.minEarSpan - 0.01);
+  check('scrollbar marked at-max at extreme zoom', edge.atMax);
+  check('left ear hidden at max zoom', !edge.earLVisible);
+  check('right ear hidden at max zoom', !edge.earRVisible);
 
-  console.log('[7] ear drag still resizes when the thumb is at min width');
+  console.log('[7] ear drag resizes when the thumb is above min width');
   const earDrag = await js(`(() => {
     const T = window.__app.timeline;
     const bar = document.querySelector('#timeline-scrollbar');
     const br = bar.getBoundingClientRect();
     const barW = bar.clientWidth;
-    T.setZoom(2000);
+    T.setZoom(T.minZoom() * 4);
     T.viewStart = 3;
     T.clampView(); T.updateScrollbar();
     const grabR = T.thumbVisual(barW).right;

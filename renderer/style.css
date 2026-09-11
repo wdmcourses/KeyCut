@@ -532,7 +532,6 @@ body {
   margin-top: 8px;
   border-radius: var(--radius-md);
   background: var(--scrollbar-track);
-  cursor: grab;
 }
 
 body.drag-cursor-grabbing * { cursor: grabbing !important; }
@@ -570,6 +569,10 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
   background: var(--scrollbar-caret);
   cursor: ew-resize;
   z-index: 2;
+}
+#timeline-scrollbar.sb-at-max #scrollbar-handle-l,
+#timeline-scrollbar.sb-at-max #scrollbar-handle-r {
+  display: none;
 }
 #scrollbar-handle-l { left: 0; border-radius: var(--radius-md) 0 0 var(--radius-md); }
 #scrollbar-handle-r { right: 0; border-radius: 0 var(--radius-md) var(--radius-md) 0; }
