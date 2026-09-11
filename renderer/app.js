@@ -354,7 +354,7 @@ const SCROLLBAR = {
 };
 const RESIZE_TOL_PX = 7;
 const WHEEL_LINE_PX = 40;          
-const WHEEL_STEP_FRACTION = 0.12;  
+const WHEEL_STEP_FRACTION = 0.35;  
 const RENDER_CAP = 4000;           
 const CARET_UPDATE_MS = 0.004;     
 const DUR_EXTEND_MARGIN = 0.05;    
@@ -365,6 +365,7 @@ const HOLD_TO_SCAN_MS = 250;
 const SCAN_INTERVAL_MS = 33;       
 const SCAN_SEEK_MS = 0.03;         
 const EXPORT_CONCAT_PROGRESS = 0.97;
+const WAVEFORM_FADE_MS = 220;
 
 function hslToHex(hh, sat, lit) {
   const c = (1 - Math.abs(2 * lit - 1)) * sat;
@@ -523,7 +524,7 @@ function snapKey(t, keys) {
   if (idx >= keys.length) return keys[keys.length - 1];
   const prev = idx > 0 ? keys[idx - 1] : keys[0];
   const next = keys[idx];
-  return (next - t <= t - prev) ? next : prev;
+  return (next - t <= t - prev + 1e-9) ? next : prev;
 }
 
 function endSnap(t, end, keys, fps) {
@@ -758,15 +759,10 @@ class Timeline {
       let grabOff = 0;
       if (x >= bodyL - tol && x <= bodyL + caret + tol) mode = 'left';
       else if (x >= bodyR - caret - tol && x <= bodyR + tol) mode = 'right';
+      if (x < bodyL - tol || x > bodyR + tol) return;
       app.beginDragCursor(mode === 'pan' ? 'grabbing' : 'ew-resize');
       if (mode === 'left') grabOff = x - bodyL;
       else if (mode === 'right') grabOff = bodyR - x;
-      else if (x < bodyL - tol || x > bodyR + tol) {
-        this.setViewCenter(this.barTime(x, barW));
-        this.needsRender = true;
-        this.tick();
-        this.updateScrollbar();
-      }
       const startX = x;
       const startView = this.viewStart;
       if (this.thumbEl) this.thumbEl.classList.add('dragging');
@@ -1357,6 +1353,7 @@ toggleSelectSegment(i) {
 
   onWheel(e) {
     e.preventDefault();
+    if (this.drag) return;
     if (e.ctrlKey) {
       
       const rect = this.canvas.getBoundingClientRect();
@@ -1787,6 +1784,14 @@ toggleSelectSegment(i) {
       const img = slice.img;
       const srcX = (visX0 - x) / w * img.naturalWidth;
       const srcW = (visX1 - visX0) / w * img.naturalWidth;
+      if (slice.birth != null && WAVEFORM_FADE_MS > 0) {
+        const alpha = Math.max(0, Math.min(1, (performance.now() - slice.birth) / WAVEFORM_FADE_MS));
+        if (alpha >= 1) slice.birth = null;
+        lc.globalAlpha = alpha;
+        lc.drawImage(img, srcX, 0, srcW, img.naturalHeight, visX0, SEG.y, visX1 - visX0, SEG.h);
+        lc.globalAlpha = 1;
+        continue;
+      }
       lc.drawImage(img, srcX, 0, srcW, img.naturalHeight, visX0, SEG.y, visX1 - visX0, SEG.h);
     }
     if (WAVEFORM_OFF_DIM > 0 && this.markers && this.markers.length) {
@@ -2295,6 +2300,7 @@ const app = {
           this.video.currentTime = Math.min(Math.max(0, t), this.video.duration);
         }
       }
+      setTimeout(() => this.updateFitButtons(), 150);
     });
     this.video.addEventListener('timeupdate', () => {
       if (!this.video.paused && !(this.timeline.drag && this.timeline.drag.mode !== 'pan')) this.guardPlayback();
@@ -2572,7 +2578,7 @@ guardTarget(t) {
     $('task-modal-message').textContent = message;
     const fill = $('task-modal-fill');
     fill.classList.toggle('indeterminate', indeterminate);
-    fill.style.width = Math.round(progress * 100) + '%';
+    if (!indeterminate) fill.style.width = Math.round(progress * 100) + '%';
     $('task-modal').classList.remove('hidden');
   },
 
@@ -2580,7 +2586,7 @@ guardTarget(t) {
     if (message != null) $('task-modal-message').textContent = message;
     const fill = $('task-modal-fill');
     if (indeterminate != null) fill.classList.toggle('indeterminate', indeterminate);
-    if (progress != null) fill.style.width = Math.round(progress * 100) + '%';
+    if (progress != null && !indeterminate) fill.style.width = Math.round(progress * 100) + '%';
   },
 
   hideTaskModal() {
@@ -2606,7 +2612,7 @@ guardTarget(t) {
     this.syncMarkerBubble();
     if (!$('find-bar').classList.contains('hidden')) return;
     inp.focus();
-    inp.setSelectionRange(inp.value.length, inp.value.length);
+    inp.select();
   },
 
   hideMarkerBubble() {
@@ -2731,7 +2737,7 @@ guardTarget(t) {
     else $('time-pct').textContent = '';
   },
 
-  applyVideoMeta(meta) {
+  async applyVideoMeta(meta) {
     this.state.duration = meta.duration;
     this.state.width = meta.width;
     this.state.height = meta.height;
@@ -2754,9 +2760,11 @@ guardTarget(t) {
     this.updateStats();
     this.setVideoEnabled(true);
     this._videoSize = { width: meta.width, height: meta.height };
-    if (!this._skipFitWindow) this.fitWindowToVideo();
+    if (!this._skipFitWindow) {
+      await this.fitWindowToVideo();
+    }
     this._skipFitWindow = false;
-    this.updateFitButtons();
+    await this.updateFitButtons();
     this.state.waveform.slices.clear();
     this.state.waveform.pending.clear();
     if (this.state.waveform.enabled) this.scheduleWaveformRender();
@@ -2836,9 +2844,17 @@ guardTarget(t) {
       const url = URL.createObjectURL(blob);
       const img = new Image();
       img.onload = () => {
-        w.slices.set(from, { from, to: from + dur, img, url });
+        w.slices.set(from, { from, to: from + dur, img, url, birth: performance.now() });
         this.timeline.needsRender = true;
         this.timeline.tick();
+        const fadeLoop = () => {
+          const sl = w.slices.get(from);
+          if (!sl || sl.birth == null || !w.enabled) return;
+          this.timeline.needsRender = true;
+          this.timeline.tick();
+          if (performance.now() - sl.birth < WAVEFORM_FADE_MS) requestAnimationFrame(fadeLoop);
+        };
+        if (WAVEFORM_FADE_MS > 0) requestAnimationFrame(fadeLoop);
       };
       img.onerror = () => { try { URL.revokeObjectURL(url); } catch {} };
       img.src = url;
@@ -2923,6 +2939,7 @@ guardTarget(t) {
     const nW = Math.max(MIN_WIN_W - g.frameW, Math.round(vw + g.HOff));
     const nH = Math.max(MIN_WIN_H - g.frameH, Math.round(vh + g.VOff));
     await window.keycut.setWindowContentSize(nW, nH, g.frameW, g.frameH);
+    await window.keycut.centerWindowOn({ x: window.screen.availLeft + window.screen.availWidth / 2, y: window.screen.availTop + window.screen.availHeight / 2 });
   },
 
   fitGeometry() {
@@ -2944,6 +2961,7 @@ guardTarget(t) {
     let wa = { width: window.screen.width, height: window.screen.height };
     try { wa = await window.keycut.workArea(); } catch {}
     const A = targetW / targetH;
+    const keepCenter = this._fitKeepCenter ? { x: window.screenX + window.outerWidth / 2, y: window.screenY + window.outerHeight / 2 } : null;
     await settle();
     let nW = null, nH = null;
     for (let i = 0; i < 3; i++) {
@@ -2968,6 +2986,7 @@ guardTarget(t) {
       if (Math.abs(dw) < 1 && Math.abs(dh) < 1) break;
       nW += Math.round(dw); nH += Math.round(dh);
     }
+    if (keepCenter) await window.keycut.centerWindowOn(keepCenter);
     await this.updateFitButtons();
   },
 
@@ -2982,14 +3001,18 @@ guardTarget(t) {
     const { width, height } = this.videoFitSize();
     if (!width || !height) return;
     const dpr = window.devicePixelRatio || 1;
+    this._fitKeepCenter = true;
     await this.applyFit(width / dpr, height / dpr);
+    this._fitKeepCenter = false;
   },
 
   async fitWindowScale(scale) {
     const { width, height } = this.videoFitSize();
     if (!width || !height) return;
     const dpr = window.devicePixelRatio || 1;
+    this._fitKeepCenter = true;
     await this.applyFit(width / dpr * scale, height / dpr * scale);
+    this._fitKeepCenter = false;
   },
 
   async updateFitButtons() {
@@ -3004,12 +3027,14 @@ guardTarget(t) {
     const g = this.fitGeometry();
     let wa = { width: window.screen.width, height: window.screen.height };
     try { wa = await window.keycut.workArea(); } catch {}
+    const slackW = 12;
+    const slackH = 12;
     const fits = [];
     for (const pct of FIT_SCALES) {
       const s = pct / 100;
       const W = vw / dpr * s + g.HOff;
       const H = vh / dpr * s + g.VOff;
-      if (W >= (MIN_WIN_W - g.frameW) && H >= (MIN_WIN_H - g.frameH) && (W + g.frameW) <= wa.width && (H + g.frameH) <= wa.height) fits.push(pct);
+      if (W >= (MIN_WIN_W - g.frameW) && H >= (MIN_WIN_H - g.frameH) && (W + g.frameW) <= wa.width + slackW && (H + g.frameH) <= wa.height + slackH) fits.push(pct);
     }
     let shown = fits;
     if (fits.length > 7) {
@@ -3126,7 +3151,7 @@ guardTarget(t) {
       try { await this.fitWindowToVideo(); } catch {}
       this._skipFitWindow = true;
     }
-    this.applyVideoMeta(meta);
+    await this.applyVideoMeta(meta);
     this._loadingSrc = false;
     this.setStatus('Loaded: ' + path);
   },
@@ -3847,7 +3872,8 @@ releaseFrameNav() {
     }
     if (data.winBounds && (data.winBounds.w || data.winBounds.h)) {
       this._skipFitWindow = true;
-      window.keycut.setWindowBounds(data.winBounds);
+      await window.keycut.setWindowBounds(data.winBounds);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     }
 
     this.showTaskModal({ title: 'Open file', message: 'Analyzing source video…', indeterminate: true });
@@ -3892,7 +3918,7 @@ releaseFrameNav() {
     this.state.dirty = false;
     this.$labelUpdate();
 
-    this.applyVideoMeta({
+    await this.applyVideoMeta({
       duration,
       width: (data.video && data.video.w) || meta.width,
       height: (data.video && data.video.h) || meta.height,
@@ -3927,6 +3953,7 @@ releaseFrameNav() {
     this.$labelUpdate();
     this.updateStats();
     this.setStatus('Project loaded: ' + filePath);
+    setTimeout(() => this.updateFitButtons(), 200);
   },
 
   async export() {
@@ -4685,7 +4712,7 @@ releaseFrameNav() {
     if (this.scrubAudio) { this.scrubAudio.src = toFileUrl(path); this.scrubAudio.load(); }
     this.state.dirty = false;
     this.$labelUpdate();
-    this.applyVideoMeta(meta);
+    await this.applyVideoMeta(meta);
     this._loadingSrc = false;
     tl.markers = (markers || []).map((m) => ({ id: ++tl._markerSeq, t: m.t, name: m.name || '', color: m.color || '#7bd88f', off: !!m.off }));
     if (Number.isFinite(pps) && pps > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(ZOOM_MAX, pps));

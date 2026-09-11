@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('keycut', {
   setWindowSize: (width, height) => ipcRenderer.invoke('win:setSize', { width, height }),
   setWindowContentSize: (width, height, frameW, frameH) => ipcRenderer.invoke('win:setContentSize', { width, height, frameW, frameH }),
   setWindowBounds: (bounds) => ipcRenderer.invoke('win:setBounds', bounds),
+  centerWindowOn: (center) => ipcRenderer.invoke('win:centerOn', center),
 
   saveProject: (filePath, data) => ipcRenderer.invoke('project:save', { filePath, data }),
   loadProject: (filePath) => ipcRenderer.invoke('project:load', filePath),
