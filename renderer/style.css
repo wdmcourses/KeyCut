@@ -60,6 +60,7 @@
   --control-text: var(--text);
   --control-hover: var(--panel-3);
   --control-hover-border: #39404a;
+  --track-h: 7px;
 
   /* Video */
   --video-bg: #07080a;
@@ -107,6 +108,8 @@
   --radius-lg: 12px;
   --radius-pill: 999px;
   --radius-bubble: 8px;
+  --pad: 10px;
+  --modal-pad: calc(var(--pad) + 4px) calc(var(--pad) + 6px);
 
   /* Font */
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -159,12 +162,12 @@ body {
   font-family: var(--font);
   font-weight: 400;
   cursor: pointer;
-  transition: background .12s, border-color .12s, transform .05s, filter .12s, box-shadow .12s;
+  transition: background .12s, border-color .12s, filter .12s, box-shadow .12s;
   white-space: nowrap;
   user-select: none;
 }
 :where(.btn):hover { background: var(--b-hover-bg); border-color: var(--b-hover-border); filter: var(--b-hover-filter); }
-:where(.btn):active { transform: translateY(1px); }
+:where(.btn):active { filter: brightness(0.94); }
 :where(.btn):disabled { opacity: .45; cursor: default; }
 :where(.btn):focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 
@@ -299,6 +302,10 @@ body {
   z-index: 100;
 }
 #help-modal { z-index: 200; }
+#export-settings-modal {
+  align-items: flex-start;
+  justify-content: center;
+}
 
 .modal-card {
   background: var(--panel);
@@ -308,14 +315,16 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: var(--modal-pad);
 }
-.modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.modal-title { font-size: 16px; font-weight: 600; color: var(--text); }
 .modal-text { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
 
 /* ---------- 6. Progress ---------- */
 
 .progress-track {
-  height: 6px;
+  position: relative;
+  height: var(--track-h);
   border-radius: 3px;
   background: var(--panel-2);
   overflow: hidden;
@@ -325,6 +334,16 @@ body {
   width: 0%;
   background: linear-gradient(90deg, var(--accent), var(--accent-strong));
   transition: width .15s;
+}
+.modal-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+  z-index: 2;
+  pointer-events: none;
+  background: rgba(255,255,255,0.1);
 }
 
 /* ---------- 7. Kbd / hints ---------- */
@@ -355,7 +374,7 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 10px 10px 4px;
+  padding: var(--pad) var(--pad) 4px;
 }
 
 #video-wrap {
@@ -448,7 +467,7 @@ body {
 
 #timeline-section {
   flex: 0 0 auto;
-  padding: 0 10px 10px;
+  padding: 0 var(--pad) var(--pad);
 }
 
 #timeline-wrap {
@@ -456,7 +475,7 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 10px 10px 8px;
+  padding: var(--pad) var(--pad) 8px;
   box-shadow: 0 6px 24px var(--shadow-panel);
 }
 
@@ -604,7 +623,7 @@ body {
   cursor: pointer;
 }
 #zoom-range::-webkit-slider-runnable-track {
-  height: 7px;
+  height: var(--track-h);
   margin-top: 0;
   border-radius: var(--radius-pill);
   background: var(--border-hi);
@@ -631,7 +650,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 10px;
+  padding: 0 var(--pad);
   background: var(--panel);
   border-top: 1px solid var(--border);
   font-size: 12px;
@@ -696,12 +715,77 @@ body {
 
 /* ---------- 14. Modals (sizing) ---------- */
 
-#export-modal-card { width: 320px; padding: 18px 20px; }
+#export-modal-card { width: 320px; }
 #export-modal-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-#convert-modal-card { width: 380px; padding: 18px 20px; }
+#export-settings-card { width: 360px; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.switch { position: relative; flex: 0 0 auto; width: 36px; height: 20px; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track { position: absolute; inset: 0; background: var(--panel-3); border-radius: var(--radius-pill); transition: background .15s; }
+.switch-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-on-solid); transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.switch input:checked + .switch-track { background: var(--success); }
+.switch input:checked + .switch-track .switch-knob { left: 18px; }
+.switch input:disabled + .switch-track { opacity: .45; }
+.switch-label { font-size: 12.5px; color: var(--text); }
+.export-compress { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+#export-resolution-row { display: flex; align-items: center; gap: 6px; }
+.res-label { font-size: 12.5px; color: var(--text-dim); white-space: nowrap; }
+.res-opt { flex: 1 1 0; padding: 3px 6px; }
+#export-compress-toggle { padding: 3px 10px; }
+#export-settings-card .btn-group--end { margin-top: 10px; }
+
+#convert-modal-card {
+  width: min-content;
+  min-width: 310px;
+  max-width: 94vw;
+}
 #convert-modal-message { min-height: 18px; }
 #convert-modal-buttons { margin-top: 4px; }
+.msgbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.msgbox.boxed {
+  background: var(--panel-2);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+}
+.detail-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+}
+.detail-label {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.detail-opt {
+  flex: 1 1 0;
+  padding: 3px 0;
+  font-size: 11px;
+  border-radius: var(--radius-xs);
+}
+.modal-sub {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.detail-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  line-height: 1.45;
+}
 #convert-modal-fill.indeterminate {
   width: 30%;
   animation: convert-indeterminate 1.4s ease-in-out infinite;
@@ -714,7 +798,6 @@ body {
 #help-modal-card {
   width: 640px;
   max-width: 94vw;
-  padding: 16px 18px;
   max-height: 88vh;
   overflow-y: auto;
 }
@@ -785,7 +868,7 @@ body {
 }
 .shortcut-row .desc { text-align: left; }
 
-#locate-modal-card { width: 400px; padding: 18px 20px; }
+#locate-modal-card { width: 400px; }
 #locate-modal-msg { margin: -2px 0 6px; word-break: break-word; }
 #locate-choose {
   width: 100%;

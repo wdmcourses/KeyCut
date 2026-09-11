@@ -49,8 +49,7 @@
           <button id="btn-open" class="btn btn--sm" title="Open file (Ctrl+O)">Open</button>
           <button id="btn-save" class="btn btn--sm" title="Save project (Ctrl+S)">Save</button>
           <button id="btn-set-keys" class="btn btn--sm btn--accent hidden" title="Re-encode with frequent keyframes">Set keys</button>
-          <button id="btn-export" class="btn btn--sm btn--primary" title="Export lossless (Ctrl+E)">Export</button>
-          <button id="btn-export-parts" class="btn btn--sm btn--primary" title="Export each marker part to a file (Ctrl+Shift+E)" disabled>Multiexport</button>
+          <button id="btn-export" class="btn btn--sm btn--primary" title="Export (Ctrl+E)">Export</button>
         </div>
       </div>
     </section>
@@ -114,13 +113,55 @@
       <div id="export-modal-title" class="modal-title">Export</div>
       <div id="export-modal-bar" class="progress-track"><div id="export-modal-fill" class="progress-fill"></div></div>
       <div id="export-modal-status" class="modal-text">Preparing…</div>
+      <div class="btn-group btn-group--end">
+        <button id="export-cancel" class="btn btn--sm btn--danger" style="display:none">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="export-settings-modal" class="modal hidden">
+    <div id="export-settings-card" class="modal-card">
+      <div id="export-settings-title" class="modal-title">Export settings</div>
+      <label class="switch-row" id="export-blocks-row">
+        <span class="switch-label">Export marker blocks separately</span>
+        <span class="switch">
+          <input type="checkbox" id="export-blocks-separate" />
+          <span class="switch-track"><span class="switch-knob"></span></span>
+        </span>
+      </label>
+      <div class="export-compress">
+        <button id="export-compress-toggle" class="btn btn--xs" title="Re-encode with the universal preset">Compress: OFF</button>
+        <div id="export-resolution-row" class="hidden">
+          <span class="res-label">Resolution:</span>
+          <button class="res-opt btn btn--xs btn--primary" data-res="origin">Origin</button>
+          <button class="res-opt btn btn--xs" data-res="720">720p</button>
+          <button class="res-opt btn btn--xs" data-res="1080">1080p</button>
+          <button class="res-opt btn btn--xs" data-res="1440">1440p</button>
+          <button class="res-opt btn btn--xs" data-res="2160">2160p</button>
+        </div>
+      </div>
+      <div class="btn-group btn-group--end">
+        <button id="export-settings-cancel" class="btn btn--sm btn--danger">Cancel</button>
+        <button id="export-settings-action" class="btn btn--sm btn--primary">Export</button>
+      </div>
     </div>
   </div>
 
   <div id="convert-modal" class="modal hidden">
     <div id="convert-modal-card" class="modal-card">
+
       <div id="convert-modal-title" class="modal-title">Set keys</div>
-      <div id="convert-modal-message" class="modal-text"></div>
+      <div id="convert-modal-sub" class="modal-sub">Re-encodes the video with frequent keyframes for more precise editing.</div>
+      <div id="convert-modal-detail" class="detail-group">
+        <span class="detail-label">Detail:</span>
+        <button id="detail-low" class="detail-opt btn" data-level="low">Low</button>
+        <button id="detail-medium" class="detail-opt btn" data-level="medium">Medium</button>
+        <button id="detail-high" class="detail-opt btn btn--primary" data-level="high">High</button>
+      </div>
+      <div id="detail-desc" class="detail-desc"></div>
+      <div id="convert-modal-msgbox" class="msgbox">
+        <div id="convert-modal-message" class="modal-text"></div>
+      </div>
       <div id="convert-modal-bar" class="progress-track"><div id="convert-modal-fill" class="progress-fill"></div></div>
       <div id="convert-modal-buttons" class="btn-group btn-group--end">
         <button id="convert-cancel" class="btn btn--sm btn--danger" title="Cancel">Cancel</button>
@@ -174,6 +215,17 @@
       <div id="locate-path" class="locate-path"></div>
       <div class="btn-group btn-group--end locate-actions">
         <span id="locate-warn" class="warn hidden">This is not the right file</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirm-modal" class="modal hidden">
+    <div id="confirm-card" class="modal-card">
+      <div id="confirm-title" class="modal-title">Overwrite files?</div>
+      <div id="confirm-message" class="modal-text"></div>
+      <div class="btn-group btn-group--end">
+        <button id="confirm-cancel" class="btn btn--sm btn--danger">Cancel</button>
+        <button id="confirm-ok" class="btn btn--sm btn--primary">Overwrite</button>
       </div>
     </div>
   </div>

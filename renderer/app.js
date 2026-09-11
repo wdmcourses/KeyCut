@@ -358,6 +358,7 @@ const WHEEL_STEP_FRACTION = 0.12;
 const RENDER_CAP = 4000;           
 const CARET_UPDATE_MS = 0.004;     
 const DUR_EXTEND_MARGIN = 0.05;    
+const CONVERT_INTERVALS = { low: 0.5, medium: 1 / 6, high: 0.1 };
 const BLIP_MS = 80;                
 const BLIP_PLAY_MS = 150;          
 const HOLD_TO_SCAN_MS = 250;       
@@ -522,6 +523,8 @@ function snapKey(t, keys) {
 function endSnap(t, end, keys, fps) {
   const c = Math.max(0, Math.min(t, end));
   if (!end) return keys && keys.length ? snapKey(c, keys) : c;
+  const last = keys && keys.length ? keys[keys.length - 1] : null;
+  if (last != null && c >= last) return end;
   const tol = fps > 0 ? Math.max(1e-3, 1 / fps) : 1e-3;
   return (c >= end - tol) ? end : (keys && keys.length ? snapKey(c, keys) : c);
 }
@@ -1434,11 +1437,12 @@ toggleSelectSegment(i) {
     for (const m of sorted) {
       const x = this.timeToX(m.t);
       if (x < -12 || x > this.w + 12) continue;
+      const gx = Math.max(4, Math.min(x, this.w - 4));
       const img = this.glyphFor('#ffffff');
       if (img && img.complete) {
         ctx.save();
         ctx.filter = 'brightness(1.35)';
-        ctx.drawImage(img, x - 8, MARK.y + 1, 14, 14);
+        ctx.drawImage(img, gx - 8, MARK.y + 1, 14, 14);
         ctx.restore();
       }
       ctx.fillStyle = m.off ? 'rgba(170,180,190,0.85)' : 'rgba(255,255,255,0.9)';
@@ -1888,6 +1892,11 @@ const app = {
       enabled: true,
       slices: new Map(),
       pending: new Set()
+    },
+    exportSettings: {
+      compress: false,
+      resolution: 'origin',
+      blocks: false
     }
   },
 
@@ -2074,7 +2083,7 @@ const app = {
   bindDragDrop() {
     let depth = 0;
     window.addEventListener('dragover', (e) => e.preventDefault());
-    window.addEventListener('dragenter', () => { depth++; document.body.classList.add('drag-over'); });
+    window.addEventListener('dragenter', () => { depth++; if (!this.isModalOpen()) document.body.classList.add('drag-over'); });
     window.addEventListener('dragleave', () => { depth--; if (depth <= 0) document.body.classList.remove('drag-over'); });
     window.addEventListener('drop', (e) => {
       e.preventDefault();
@@ -2095,6 +2104,7 @@ const app = {
       if (this._locateVerify) this._locateVerify(p);
       return;
     }
+    if (this.isModalOpen()) { this.setStatus('Close the dialog to open a file'); return; }
     if (!await this.confirmDiscardIfDirty()) { this.setStatus('Open cancelled'); return; }
     this.scrubEnd();
     if (/\.kc$/i.test(p)) await this.openProjectFromPath(p);
@@ -2106,7 +2116,19 @@ const app = {
     $('btn-open2').addEventListener('click', () => this.openFile());
     $('btn-save').addEventListener('click', () => this.saveProject());
     $('btn-export').addEventListener('click', () => this.export());
-    $('btn-export-parts').addEventListener('click', () => this.exportParts());
+    $('export-cancel').addEventListener('click', () => this.cancelExport());
+    $('export-settings-cancel').addEventListener('click', () => this.closeExportSettings());
+    $('export-settings-action').addEventListener('click', () => this.doExport());
+    $('export-compress-toggle').addEventListener('click', () => this.toggleExportCompress());
+    $('export-blocks-separate').addEventListener('change', () => {
+      this.state.exportSettings.blocks = $('export-blocks-separate').checked;
+      this.persistExportSettings();
+    });
+    $('confirm-ok').addEventListener('click', () => this._confirmResolve(true));
+    $('confirm-cancel').addEventListener('click', () => this._confirmResolve(false));
+    for (const b of document.querySelectorAll('.res-opt')) {
+      b.addEventListener('click', () => this.setExportResolution(b.dataset.res));
+    }
     $('btn-play').addEventListener('click', () => this.togglePlay());
     $('btn-start').addEventListener('click', () => this.navPause(() => this.homeNav()));
     $('btn-end').addEventListener('click', () => this.navPause(() => this.endNav()));
@@ -2123,6 +2145,9 @@ const app = {
     $('convert-cancel').addEventListener('click', () => this.cancelConvert());
     $('convert-place').addEventListener('click', () => this.placeVideo(false));
     $('convert-action').addEventListener('click', () => this.convertAction());
+    $('detail-low').addEventListener('click', () => this.setConvertDetail('low'));
+    $('detail-medium').addEventListener('click', () => this.setConvertDetail('medium'));
+    $('detail-high').addEventListener('click', () => this.setConvertDetail('high'));
     $('convert-modal').addEventListener('click', (e) => {
       if (e.target === $('convert-modal')) {
         const cs = this._convertState;
@@ -2139,6 +2164,11 @@ const app = {
     $('btn-zoom-out').addEventListener('click', () => { zr.value = Math.max(0, +zr.value - 8); zr.dispatchEvent(new Event('input')); });
     this.buildFitButtons();
 
+    window.addEventListener('resize', () => {
+      clearTimeout(this._fitBtnTimer);
+      this._fitBtnTimer = setTimeout(() => this.updateFitButtons(), 150);
+    });
+
     
     window.addEventListener('click', (e) => {
       if (e.target && e.target.tagName === 'BUTTON') e.target.blur();
@@ -2151,7 +2181,7 @@ const app = {
       
       
       const vd = this.video.duration;
-      if (this.state.source && Number.isFinite(vd) && vd > 0 && vd > this.state.duration + DUR_EXTEND_MARGIN) {
+      if (!this._loadingSrc && this.state.source && Number.isFinite(vd) && vd > 0 && vd > this.state.duration + DUR_EXTEND_MARGIN) {
         this.state.duration = vd;
         this.model.duration = vd;
         const cuts = this.model.cuts;
@@ -2335,13 +2365,24 @@ guardTarget(t) {
   bindKeys() {
     window.addEventListener('keydown', (e) => {
       if (e.target && e.target.tagName === 'INPUT') return;
+      if (e.code === 'F1') { e.preventDefault(); this.toggleHelp(); return; }
       const cs = this._convertState;
-      if (cs === 'analyzing' || cs === 'converting' || cs === 'done') return;
-      if (!$('help-modal').classList.contains('hidden')) {
+      if (this.isModalOpen() || cs === 'analyzing' || cs === 'converting' || cs === 'done') {
         if (e.code === 'Escape') {
           e.preventDefault();
           this.cancelStepPause();
-          $('help-modal').classList.add('hidden');
+          const hm = $('help-modal');
+          if (!hm.classList.contains('hidden')) { hm.classList.add('hidden'); return; }
+          const es = $('export-settings-modal');
+          if (es && !es.classList.contains('hidden')) { es.classList.add('hidden'); return; }
+          const cm = $('convert-modal');
+          if (!cm.classList.contains('hidden')) {
+            if (cs === 'ready' || cs === 'error') { this.closeConvertModal(); return; }
+            return;
+          }
+          const cf = $('confirm-modal');
+          if (cf && !cf.classList.contains('hidden')) { this._confirmResolve(false); return; }
+          if (this._locateResolve) { this._locateResolve(null); return; }
         }
         return;
       }
@@ -2352,10 +2393,6 @@ guardTarget(t) {
       if (mod && e.shiftKey && e.code === 'KeyS') { e.preventDefault(); this.navPause(() => this.homeNav()); return; }
       if (mod && e.code === 'KeyE') {
         e.preventDefault();
-        if (e.shiftKey) {
-          if (!$('btn-export-parts').disabled) this.exportParts();
-          return;
-        }
         this.export();
         return;
       }
@@ -2478,9 +2515,6 @@ guardTarget(t) {
 
   syncExportButton() {
     const has = this.hasMarkers() && this.markersHaveContent();
-    const btn = $('btn-export-parts');
-    btn.style.display = has ? '' : 'none';
-    btn.disabled = !has;
     $('btn-start').title = has ? 'Previous marker' : 'Go to start of project';
     $('btn-end').title = has ? 'Next marker' : 'Go to end of project';
   },
@@ -2798,6 +2832,7 @@ guardTarget(t) {
       if (Math.abs(dw) < 1 && Math.abs(dh) < 1) break;
       nW += Math.round(dw); nH += Math.round(dh);
     }
+    await this.updateFitButtons();
   },
 
   videoFitSize() {
@@ -2935,6 +2970,7 @@ guardTarget(t) {
     this.state.source = path;
     window.keycut.lockSource(path);
     this.state.projectPath = null;
+    this._loadingSrc = true;
     this._videoSize = { width: meta.width, height: meta.height };
     this.cancelSkipMute();
     this.stopPlaybackGuard();
@@ -2953,6 +2989,7 @@ guardTarget(t) {
       this._skipFitWindow = true;
     }
     this.applyVideoMeta(meta);
+    this._loadingSrc = false;
     this.setStatus('Loaded: ' + path);
   },
 
@@ -3255,8 +3292,12 @@ frameDeleted(t) {
     this.ensureCursorVisible();
   },
 
+  isModalOpen() {
+    return ['help-modal', 'export-modal', 'export-settings-modal', 'locate-modal', 'convert-modal', 'confirm-modal'].some((id) => !$(id).classList.contains('hidden'));
+  },
+
   async toggleFind() {
-    if (!$('help-modal').classList.contains('hidden')) return;
+    if (this.isModalOpen()) return;
     if (!this.state.source) {
       this.setStatus('Open a project to search markers');
       return;
@@ -3518,6 +3559,7 @@ releaseFrameNav() {
       zoom: this.timeline ? this.timeline.pxPerSec : 0,
       viewStart: this.timeline ? this.timeline.viewStart : 0,
       markers: this.timeline ? this.timeline.markers : [],
+      exportSettings: this.state.exportSettings,
       winBounds: {
         x: window.screenX,
         y: window.screenY,
@@ -3547,7 +3589,7 @@ releaseFrameNav() {
       const warn = $('locate-warn');
       const chooseBtn = $('locate-choose');
       let verifying = false;
-      nameEl.textContent = data.src.split(/[\\/]/).pop();
+      nameEl.textContent = data.src ? data.src.split(/[\\/]/).pop() : (data.srcName || 'video');
       pathEl.textContent = '';
       warn.classList.add('hidden');
       const setState = (s) => {
@@ -3634,7 +3676,7 @@ releaseFrameNav() {
       return;
     }
     const data = res;
-    if (!data.src) { this.setStatus('Load failed: missing <src>'); return; }
+    if (!data.src && !data.srcName) { this.setStatus('Load failed: missing <src>'); return; }
     if (data.srcRel) {
       const r = await window.keycut.resolveProjectSource(filePath, data.srcRel);
       if (r && r.path) data.src = r.path;
@@ -3669,7 +3711,7 @@ releaseFrameNav() {
     this.state.source = data.src;
     window.keycut.lockSource(data.src);
     this.state.projectPath = filePath;
-    const duration = (data.video && data.video.dur) || meta.duration;
+    const duration = meta.duration > 0 ? meta.duration : ((data.video && data.video.dur) || meta.duration);
     const tl = this.timeline;
     this.model.clearHistory();
     this.model.cuts = data.cuts;
@@ -3678,6 +3720,7 @@ releaseFrameNav() {
     this.cancelSkipMute();
     this.stopPlaybackGuard();
     this.cancelStepPause();
+    this._loadingSrc = true;
 
     this.video.src = toFileUrl(data.src);
     this.video.load();
@@ -3696,8 +3739,16 @@ releaseFrameNav() {
       hasThumbnail: meta.hasThumbnail,
       streams: meta.streams
     });
+    this._loadingSrc = false;
 
     tl.markers = (data.markers || []).map((m, i) => ({ id: ++tl._markerSeq, t: m.t, name: m.name || '', color: m.color || '#7bd88f', off: !!m.off }));
+    if (data.exportSettings) {
+      this.state.exportSettings = {
+        compress: !!data.exportSettings.compress,
+        resolution: data.exportSettings.resolution || 'origin',
+        blocks: !!data.exportSettings.blocks
+      };
+    }
     if (data.zoom > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(ZOOM_MAX, data.zoom));
     if (typeof data.viewStart === 'number') tl.viewStart = data.viewStart;
     this.syncExportButton();
@@ -3719,15 +3770,88 @@ releaseFrameNav() {
     if (this.state.exporting) return;
     const runs = this.exportableRuns();
     if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
+    const es = this.state.exportSettings;
+    $('export-blocks-separate').checked = !!es.blocks;
+    $('export-blocks-row').style.display = this.hasMarkers() ? '' : 'none';
+    $('export-compress-toggle').textContent = es.compress ? 'Compress: ON' : 'Compress: OFF';
+    $('export-compress-toggle').classList.toggle('btn--primary', !!es.compress);
+    $('export-resolution-row').classList.toggle('hidden', !es.compress);
+    this.setExportResolution(es.resolution);
+    this.openExportSettings();
+    this.closeFind();
+  },
 
-    const base = this.state.source.split(/[\\/]/).pop();
-    const outPath = await window.keycut.saveExportDialog(base);
+  openExportSettings() {
+    $('export-settings-modal').classList.remove('hidden');
+    const esCard = $('export-settings-card');
+    const esTop = Math.max(12, Math.round((window.innerHeight - esCard.offsetHeight) / 2));
+    esCard.style.marginTop = esTop + 'px';
+  },
+
+  closeExportSettings() {
+    $('export-settings-modal').classList.add('hidden');
+  },
+
+  confirmDialog(message) {
+    $('confirm-message').textContent = message;
+    $('confirm-modal').classList.remove('hidden');
+    return new Promise((resolve) => {
+      this._confirmResolve = (ok) => {
+        this._confirmResolve = null;
+        $('confirm-modal').classList.add('hidden');
+        resolve(ok);
+      };
+    });
+  },
+
+  toggleExportCompress() {
+    this.state.exportSettings.compress = !this.state.exportSettings.compress;
+    const btn = $('export-compress-toggle');
+    btn.classList.toggle('btn--primary', this.state.exportSettings.compress);
+    btn.textContent = this.state.exportSettings.compress ? 'Compress: ON' : 'Compress: OFF';
+    $('export-resolution-row').classList.toggle('hidden', !this.state.exportSettings.compress);
+    this.persistExportSettings();
+  },
+
+  setExportResolution(res) {
+    this.state.exportSettings.resolution = res;
+    for (const b of document.querySelectorAll('.res-opt')) {
+      b.classList.toggle('btn--primary', b.dataset.res === res);
+    }
+    this.persistExportSettings();
+  },
+
+  persistExportSettings() {
+    if (!this.state.projectPath) return;
+    const wasDirty = this.state.dirty;
+    this.saveProjectTo(this.state.projectPath).then(() => {
+      this.state.dirty = wasDirty;
+      this.$labelUpdate();
+    }).catch(() => {});
+  },
+
+  async doExport() {
+    const es = this.state.exportSettings;
+    const compressOpts = es.compress ? { compress: true, resolution: es.resolution } : null;
+    const blocks = es.blocks;
+    if (blocks) await this.exportParts(compressOpts);
+    else await this.exportSingle(compressOpts);
+  },
+
+  async exportSingle(compressOpts) {
+    if (this.state.exporting) return;
+    const runs = this.exportableRuns();
+    if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
+    const srcName = this.state.source.split(/[\\/]/).pop();
+    const base = compressOpts ? srcName.replace(/\.[^.]+$/, '') + '.mp4' : srcName;
+    const outPath = await window.keycut.saveExportDialog(base, compressOpts ? true : false);
     if (!outPath) return;
     if (this.isSourcePath(outPath)) {
       this.setStatus('Export cancelled: output file cannot overwrite the source "' + this.state.source.split(/[\\/]/).pop() + '"');
       return;
     }
-    await this.runExports([{ segments: runs, out: outPath }], false);
+    this.closeExportSettings();
+    await this.runExports([{ segments: runs, out: outPath }], false, compressOpts);
   },
 
   isSourcePath(p) {
@@ -3764,7 +3888,7 @@ releaseFrameNav() {
     await this.runExports([{ segments: segs, out: outPath }], false);
   },
 
-  async exportParts() {
+  async exportParts(compressOpts) {
     if (this._convertState === 'analyzing' || this._convertState === 'converting') return;
     if (this.state.exporting) return;
     const runs = this.exportableRuns();
@@ -3775,6 +3899,7 @@ releaseFrameNav() {
     if (!markers || !markers.length) { this.setStatus('Place at least one marker to export parts'); return; }
     const folder = await window.keycut.pickFolder();
     if (!folder) return;
+    this.closeExportSettings();
     const srcNorm = (this.state.source || '').replace(/\\/g, '/').toLowerCase();
     const srcName = this.state.source.split(/[\\/]/).pop();
     const jobs = [];
@@ -3785,7 +3910,8 @@ releaseFrameNav() {
       if (m.off) { prev = m.t; continue; }
       const segs = clipRuns(runs, prev, m.t);
       if (segs.length) {
-        const out = folder + '/' + safeFileName(m.name) + this.sourceExt();
+        const outExt = compressOpts ? '.mp4' : this.sourceExt();
+        const out = folder + '/' + safeFileName(m.name) + outExt;
         if (out.replace(/\\/g, '/').toLowerCase() === srcNorm) {
           skipped++;
           skippedNames.push(m.name || 'part');
@@ -3804,7 +3930,19 @@ releaseFrameNav() {
       } else this.setStatus('Markers cover no kept content');
       return;
     }
-    await this.runExports(jobs, true);
+    const existing = [];
+    for (const j of jobs) {
+      if (await window.keycut.fileExists(j.out)) existing.push(j.out);
+    }
+    if (existing.length) {
+      const ok = await this.confirmDialog('Some output files already exist and will be overwritten.');
+      if (!ok) {
+        this.openExportSettings();
+        this.setStatus('Export cancelled: existing files not overwritten');
+        return;
+      }
+    }
+    await this.runExports(jobs, true, compressOpts);
     if (skipped) {
       const msg = 'Part name cannot match the original file "' + srcName + '" - skipped: ' + skippedNames.join(', ');
       this.setStatus(msg);
@@ -3812,50 +3950,89 @@ releaseFrameNav() {
     }
   },
 
-  async runExports(jobs, multi) {
+  async runExports(jobs, multi, compressOpts) {
     this.state.exporting = true;
+    this._exportCancelled = false;
     $('btn-export').disabled = true;
-    $('btn-export-parts').disabled = true;
     if (this.video && !this.video.paused) this.pause();
     this.setStatus('Exporting…', true);
     this.setProgress(0);
     $('export-modal').classList.remove('hidden');
+    this.closeFind();
+    $('export-modal-title').textContent = 'Export' + (multi ? ' [1/' + jobs.length + ']' : '');
+    $('export-cancel').style.display = compressOpts ? '' : 'none';
     $('export-modal-status').textContent = 'Preparing…';
 
     const setModalStatus = (s) => { $('export-modal-status').textContent = s; };
+    let curJob = 0;
+    const multiSpan = multi && jobs.length > 1 ? 1 / jobs.length : 1;
+    const setTicks = () => {
+      const bar = $('export-modal-bar');
+      bar.querySelectorAll('.modal-tick').forEach((el) => el.remove());
+      if (multi && jobs.length > 1) {
+        const n = jobs.length;
+        for (let i = 1; i < n; i++) {
+          const el = document.createElement('div');
+          el.className = 'modal-tick';
+          el.style.left = ((i / n) * 100) + '%';
+          bar.appendChild(el);
+        }
+      }
+    };
+    setTicks();
+    let lastOverall = 0;
     const unsub = window.keycut.onExportProgress((p) => {
+      const base = multiSpan < 1 ? curJob * multiSpan : 0;
+      let local = 0;
       if (p.phase === 'cut') {
-        this.setProgress(p.total > 0 ? p.index / p.total : 0);
-        this.setStatus(`Exporting… cutting ${p.index}/${p.total}`);
-        setModalStatus(`Cutting ${p.index}/${p.total}`);
+        local = (compressOpts ? 0.1 : 0.7) * (p.total > 0 ? p.index / p.total : 0);
+        setModalStatus('Muxing…');
       } else if (p.phase === 'concat') {
-        this.setProgress(EXPORT_CONCAT_PROGRESS);
+        local = compressOpts ? 0.1 : 1;
         this.setStatus('Exporting… muxing');
         setModalStatus('Muxing…');
+      } else if (p.phase === 'encode') {
+        const pct = Math.round(p.progress * 100);
+        local = 0.1 + 0.9 * p.progress;
+        this.setStatus('Exporting… encoding ' + pct + '%');
+        setModalStatus('Encoding… ' + pct + '%');
       } else if (p.phase === 'error') {
         this.setStatus('Export failed: ' + p.message);
         this.setProgress(null);
         setModalStatus('Error: ' + p.message);
+        return;
       }
+      lastOverall = Math.max(lastOverall, base + multiSpan * Math.min(1, local));
+      this.setProgress(lastOverall);
     });
 
     let ok = true;
     let lastErr = '';
     for (let i = 0; i < jobs.length; i++) {
-      setModalStatus((multi ? (i + 1) + '/' + jobs.length + ' — ' : '') + 'Cutting…');
+      if (this._exportCancelled) { ok = false; lastErr = 'Cancelled'; break; }
+      curJob = i;
+      const segs = jobs[i].segments;
+      const jobDur = segs.reduce((a, s) => a + Math.max(0, (s[1] || 0) - (s[0] || 0)), 0);
+      if (multi) $('export-modal-title').textContent = 'Export [' + (i + 1) + '/' + jobs.length + ']';
+      setModalStatus('Muxing…');
       const res = await window.keycut.exportStart({
         sourcePath: this.state.source,
-        segments: jobs[i].segments,
+        segments: segs,
         outputPath: jobs[i].out,
         videoTimebase: this.state.videoTimebase,
         hasThumbnail: this.state.hasThumbnail,
-        streams: this.state.streams
+        streams: this.state.streams,
+        compress: compressOpts ? true : null,
+        resolution: compressOpts ? compressOpts.resolution : null,
+        duration: jobDur > 0 ? jobDur : this.state.duration
       });
       if (!(res && res.ok)) { ok = false; lastErr = res && res.error ? res.error : 'unknown error'; break; }
     }
 
     unsub();
+    $('export-modal-bar').querySelectorAll('.modal-tick').forEach((el) => el.remove());
     this.state.exporting = false;
+    this._exportCancelled = false;
     $('btn-export').disabled = false;
     this.syncExportButton();
     this.setProgress(null);
@@ -3864,30 +4041,74 @@ releaseFrameNav() {
 
     if (ok) {
       this.setStatus(multi ? 'Export parts complete: ' + jobs.length + ' files' : 'Export complete: ' + jobs[0].out);
+    } else if (lastErr === 'Cancelled') {
+      this.setStatus('Export cancelled');
     } else {
       this.setStatus('Export failed: ' + lastErr);
     }
   },
 
+  cancelExport() {
+    if (!this.state.exporting) return;
+    this._exportCancelled = true;
+    window.keycut.exportCancel();
+  },
+
   setKeys() {
     if (!this.state.source) return;
     if (this.video && !this.video.paused) this.pause();
-    this._convertState = 'analyzing';
     this._convertCancelled = false;
     this._convertOutPath = null;
     this._convertReq = (this._convertReq || 0) + 1;
+    this._convertState = 'analyzing';
+    this._convertMsg = 'Analyzing video…';
+    this._convertAction = null;
     $('convert-modal').classList.remove('hidden');
-    $('convert-modal-message').textContent = 'Analyzing video…';
-    $('convert-modal-bar').style.display = '';
-    $('convert-modal-fill').style.display = '';
-    $('convert-modal-fill').style.width = '0%';
-    $('convert-modal-fill').classList.add('indeterminate');
-    $('convert-cancel').textContent = 'Cancel';
-    $('convert-cancel').style.display = '';
-    $('convert-place').style.display = 'none';
-    $('convert-action').style.display = 'none';
+    this.closeFind();
+    this.setConvertDetail('high');
+    this.renderConvert();
     this.setConvertUIEnabled(false);
     this.runConvertAnalysis(this._convertReq);
+  },
+
+  setConvertDetail(level) {
+    this._convertDetail = level;
+    for (const l of ['low', 'medium', 'high']) {
+      $('detail-' + l).classList.toggle('btn--primary', l === level);
+    }
+    $('detail-desc').textContent = {
+      low: '≈2 keyframes/s - coarser cuts, smallest file.',
+      medium: '≈6 keyframes/s - balanced quality and size.',
+      high: '≈10 keyframes/s - finest cuts, largest file.'
+    }[level];
+  },
+
+  renderConvert() {
+    const s = this._convertState;
+    const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
+    show('convert-modal-msgbox', !!this._convertMsg);
+    show('convert-modal-sub', s === 'ready');
+    show('convert-modal-detail', s === 'ready');
+    show('detail-desc', s === 'ready');
+    show('convert-modal-bar', s === 'analyzing' || s === 'converting');
+    show('convert-modal-fill', s === 'analyzing' || s === 'converting');
+    show('convert-cancel', s === 'ready' || s === 'converting' || s === 'done');
+    show('convert-place', s === 'done');
+    show('convert-action', s === 'ready' || s === 'error' || s === 'done');
+    const mb = $('convert-modal-msgbox');
+    if (mb) mb.classList.toggle('boxed', s === 'ready');
+    const msgEl = $('convert-modal-message');
+    if (msgEl) msgEl.textContent = this._convertMsg || '';
+    const fill = $('convert-modal-fill');
+    if (fill) {
+      fill.classList.toggle('indeterminate', s === 'analyzing');
+      if (s === 'analyzing' || s === 'converting') fill.style.width = '0%';
+    }
+    const action = this._convertAction;
+    const act = $('convert-action');
+    if (act) { act.textContent = action ? action.text : ''; act.title = action ? action.title : ''; }
+    const cancel = $('convert-cancel');
+    if (cancel) { cancel.textContent = 'Cancel'; cancel.title = 'Cancel'; }
   },
 
   async runConvertAnalysis(req) {
@@ -3905,32 +4126,24 @@ releaseFrameNav() {
     unsub();
     if (this._convertState !== 'analyzing' || req !== this._convertReq) return;
     this.setConvertUIEnabled(true);
-    $('convert-modal-fill').classList.remove('indeterminate');
     if (!res || !res.ok) {
       this._convertState = 'error';
-      $('convert-modal-bar').style.display = 'none';
-      $('convert-modal-message').textContent = res && res.error ? res.error : 'Analysis failed';
-      $('convert-cancel').style.display = 'none';
-      $('convert-place').style.display = 'none';
-      $('convert-action').textContent = 'Close';
-      $('convert-action').title = 'Close';
-      $('convert-action').style.display = '';
+      this._convertMsg = (res && res.error) ? res.error : 'Analysis failed';
+      this._convertAction = { text: 'Close', title: 'Close' };
+      this.renderConvert();
       return;
     }
     this._convertState = 'ready';
-    $('convert-modal-bar').style.display = 'none';
-    $('convert-place').style.display = 'none';
-    if (res.enough) {
-      $('convert-modal-message').textContent = 'This video has approximately ' + res.avg.toFixed(1) + ' keyframes/sec on average. It already has enough keyframes for precise cutting.';
-      $('convert-action').textContent = 'Convert anyway';
-      $('convert-action').title = 'Convert anyway';
+    const fps = this.state.fps || 0;
+    const enough = res.enough || (fps > 0 && fps <= 2);
+    if (enough) {
+      this._convertMsg = 'This video has approximately ' + res.avg.toFixed(1) + ' keyframes/sec on average. It already has enough keyframes for precise cutting.';
+      this._convertAction = { text: 'Convert anyway', title: 'Convert anyway' };
     } else {
-      $('convert-modal-message').textContent = 'The output file will be significantly larger than the original.';
-      $('convert-action').textContent = 'Convert';
-      $('convert-action').title = 'Convert';
+      this._convertMsg = 'The output file will be significantly larger than the original.';
+      this._convertAction = { text: 'Convert', title: 'Convert' };
     }
-    $('convert-cancel').style.display = '';
-    $('convert-action').style.display = '';
+    this.renderConvert();
   },
 
   convertAction() {
@@ -3946,14 +4159,9 @@ releaseFrameNav() {
   async startConversion() {
     this._convertState = 'converting';
     this._convertCancelled = false;
-    $('convert-modal-message').textContent = 'Encoding…';
-    $('convert-modal-fill').style.display = '';
-    $('convert-modal-fill').classList.remove('indeterminate');
-    $('convert-modal-fill').style.width = '0%';
-    $('convert-modal-bar').style.display = '';
-    $('convert-cancel').style.display = '';
-    $('convert-place').style.display = 'none';
-    $('convert-action').style.display = 'none';
+    this._convertMsg = 'Encoding…';
+    this._convertAction = null;
+    this.renderConvert();
     this.setConvertUIEnabled(false);
     const unsub = window.keycut.onConvertProgress((p) => {
       if (p.progress != null && this._convertState === 'converting') {
@@ -3962,34 +4170,26 @@ releaseFrameNav() {
     });
     const res = await window.keycut.convertStart({
       src: this.state.source,
-      duration: this.state.duration
+      duration: this.state.duration,
+      interval: CONVERT_INTERVALS[this._convertDetail] || 0.1
     });
     unsub();
     if (this._convertState !== 'converting') return;
     this.setConvertUIEnabled(true);
     if (!res || !res.ok) {
       this._convertState = 'error';
-      $('convert-modal-bar').style.display = 'none';
-      $('convert-modal-message').textContent = res && res.error ? res.error : 'Conversion failed';
-      $('convert-cancel').style.display = 'none';
-      $('convert-place').style.display = 'none';
-      $('convert-action').textContent = 'Close';
-      $('convert-action').title = 'Close';
-      $('convert-action').style.display = '';
+      this._convertMsg = (res && res.error) ? res.error : 'Conversion failed';
+      this._convertAction = { text: 'Close', title: 'Close' };
+      this.renderConvert();
       return;
     }
     this._convertState = 'done';
     this._convertOutPath = res.out;
-    $('convert-modal-fill').style.width = '100%';
-    $('convert-modal-message').textContent = 'Conversion complete.';
-    $('convert-cancel').textContent = 'Cancel';
-    $('convert-cancel').style.display = '';
-    $('convert-place').textContent = 'Place';
-    $('convert-place').title = 'Place keyframed video without saving';
-    $('convert-place').style.display = '';
-    $('convert-action').textContent = 'Place and save';
-    $('convert-action').title = 'Place keyframed video and save project';
-    $('convert-action').style.display = '';
+    this._convertMsg = 'Conversion complete.';
+    this._convertAction = { text: 'Place and save', title: 'Place keyframed video and save project' };
+    const fill = $('convert-modal-fill');
+    if (fill) fill.style.width = '100%';
+    this.renderConvert();
   },
 
   placeVideo(save) {
@@ -4041,12 +4241,14 @@ releaseFrameNav() {
     } else {
       this.model.reset(meta.duration);
     }
+    this._loadingSrc = true;
     this.video.src = toFileUrl(path);
     this.video.load();
     if (this.scrubAudio) { this.scrubAudio.src = toFileUrl(path); this.scrubAudio.load(); }
     this.state.dirty = false;
     this.$labelUpdate();
     this.applyVideoMeta(meta);
+    this._loadingSrc = false;
     tl.markers = (markers || []).map((m) => ({ id: ++tl._markerSeq, t: m.t, name: m.name || '', color: m.color || '#7bd88f', off: !!m.off }));
     if (Number.isFinite(pps) && pps > 0) tl.pxPerSec = Math.max(tl.minZoom(), Math.min(ZOOM_MAX, pps));
     if (Number.isFinite(vstart)) tl.viewStart = vstart;

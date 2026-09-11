@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('keycut', {
     return () => ipcRenderer.removeListener('app:open-file', listener);
   },
   saveProjectDialog: (defaultName) => ipcRenderer.invoke('dialog:saveProject', defaultName),
-  saveExportDialog: (defaultName) => ipcRenderer.invoke('dialog:saveExport', defaultName),
+  saveExportDialog: (defaultName, compress) => ipcRenderer.invoke('dialog:saveExport', defaultName, compress),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
   getFilePath: (file) => webUtils.getPathForFile(file),
 
@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('keycut', {
   resolveProjectSource: (projectPath, rel) => ipcRenderer.invoke('project:resolveSource', { projectPath, rel }),
 
   exportStart: (payload) => ipcRenderer.invoke('export:start', payload),
+  exportCancel: () => ipcRenderer.invoke('export:cancel'),
   onExportProgress: (cb) => {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('export:progress', listener);
