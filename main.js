@@ -122,11 +122,21 @@ app.whenReady().then(() => {
   });
 });
 
+function cleanupTmp() {
+  try {
+    if (!fs.existsSync(TMP_DIR)) return;
+    for (const f of fs.readdirSync(TMP_DIR)) {
+      fs.rmSync(path.join(TMP_DIR, f), { recursive: true, force: true });
+    }
+  } catch {}
+}
+
 app.on('will-quit', () => {
   if (lockProc) {
     try { lockProc.kill(); } catch {}
     lockProc = null;
   }
+  cleanupTmp();
 });
 
 app.on('window-all-closed', () => {

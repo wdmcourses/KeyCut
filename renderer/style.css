@@ -115,6 +115,14 @@
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
+/* ---------- Scrollbar design system ---------- */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: content-box; border: 2px solid transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+
 /* ---------- 2. Reset & base ---------- */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -302,6 +310,8 @@ body {
   z-index: 100;
 }
 #help-modal { z-index: 200; }
+#confirm-modal { z-index: 160; }
+#locate-modal { z-index: 160; }
 #export-settings-modal {
   align-items: flex-start;
   justify-content: center;
@@ -316,9 +326,37 @@ body {
   flex-direction: column;
   gap: 12px;
   padding: var(--modal-pad);
+  width: min-content;
+  min-width: 310px;
+  max-width: 94vw;
 }
 .modal-title { font-size: 16px; font-weight: 600; color: var(--text); }
 .modal-text { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+.modal-card--wide { width: 460px; max-width: 94vw; }
+
+#concat-modal.drag-over #concat-card { outline: 2px dashed var(--accent); }
+#concat-modal.drag-over .concat-empty { border-color: var(--accent); color: var(--accent); }
+.concat-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.concat-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.concat-files { display: flex; flex-direction: column; gap: 10px; }
+.concat-list { display: flex; flex-direction: column; gap: 4px; max-height: 44vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px; }
+.concat-item { display: flex; align-items: center; gap: 8px; height: 30px; flex-shrink: 0; padding: 0 8px; border-radius: var(--radius-sm); background: var(--panel-2); cursor: grab; user-select: none; }
+.concat-item:hover { background: var(--panel-3); }
+.concat-item > * { position: relative; }
+.concat-item.dragging { opacity: .5; }
+.concat-item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.concat-item.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.concat-item .concat-idx { flex: 0 0 22px; color: var(--text-faint); font-size: 11px; text-align: center; }
+.concat-item .concat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; line-height: 1; }
+.concat-item .concat-del { flex: 0 0 auto; width: 16px; height: 16px; padding: 0; line-height: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+.concat-result { display: flex; align-items: center; gap: 10px; }
+.concat-result-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-dim); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 4px 8px; }
+.concat-status--error { color: var(--danger-text) !important; }
+.concat-progress { display: flex; flex-direction: column; gap: 6px; }
+.concat-empty { position: relative; overflow: hidden; padding: 40px 14px; text-align: center; color: var(--text-faint); font-size: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm); cursor: pointer; user-select: none; }
+.concat-empty:hover { color: var(--text-dim); border-color: var(--border-hi); }
+.concat-empty.drag-over { border-color: var(--accent); color: var(--accent); }
+.concat-empty.drag-over::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); height: 56px; background: var(--accent); opacity: .14; pointer-events: none; }
 
 /* ---------- 6. Progress ---------- */
 
@@ -496,6 +534,9 @@ body {
   background: var(--scrollbar-track);
   cursor: grab;
 }
+
+body.drag-cursor-grabbing * { cursor: grabbing !important; }
+body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
 
 #scrollbar-thumb {
   position: absolute;
@@ -735,11 +776,6 @@ body {
 #export-compress-toggle { padding: 3px 10px; }
 #export-settings-card .btn-group--end { margin-top: 10px; }
 
-#convert-modal-card {
-  width: min-content;
-  min-width: 310px;
-  max-width: 94vw;
-}
 #convert-modal-message { min-height: 18px; }
 #convert-modal-buttons { margin-top: 4px; }
 .msgbox {
@@ -787,6 +823,10 @@ body {
   line-height: 1.45;
 }
 #convert-modal-fill.indeterminate {
+  width: 30%;
+  animation: convert-indeterminate 1.4s ease-in-out infinite;
+}
+#task-modal-fill.indeterminate {
   width: 30%;
   animation: convert-indeterminate 1.4s ease-in-out infinite;
 }

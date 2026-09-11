@@ -20,6 +20,16 @@ contextBridge.exposeInMainWorld('keycut', {
   lockSource: (filePath) => ipcRenderer.invoke('source:lock', filePath),
   fileExists: (p) => ipcRenderer.invoke('file:exists', p),
   chooseFile: () => ipcRenderer.invoke('dialog:chooseFile'),
+  chooseFiles: () => ipcRenderer.invoke('dialog:chooseFiles'),
+  concatJoin: (payload) => ipcRenderer.invoke('concat:join', payload),
+  concatCancel: () => ipcRenderer.invoke('concat:cancel'),
+  concatCopyOutput: (payload) => ipcRenderer.invoke('concat:copy-output', payload),
+  concatRemoveOutput: (payload) => ipcRenderer.invoke('concat:remove-output', payload),
+  onConcatProgress: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('concat:progress', listener);
+    return () => ipcRenderer.removeListener('concat:progress', listener);
+  },
   workArea: () => ipcRenderer.invoke('screen:workArea'),
   setWindowSize: (width, height) => ipcRenderer.invoke('win:setSize', { width, height }),
   setWindowContentSize: (width, height, frameW, frameH) => ipcRenderer.invoke('win:setContentSize', { width, height, frameW, frameH }),

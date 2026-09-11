@@ -48,6 +48,7 @@
         <div class="action-buttons">
           <button id="btn-open" class="btn btn--sm" title="Open file (Ctrl+O)">Open</button>
           <button id="btn-save" class="btn btn--sm" title="Save project (Ctrl+S)">Save</button>
+          <button id="btn-concat" class="btn btn--sm btn--accent" title="Join video files">Join</button>
           <button id="btn-set-keys" class="btn btn--sm btn--accent hidden" title="Re-encode with frequent keyframes">Set keys</button>
           <button id="btn-export" class="btn btn--sm btn--primary" title="Export (Ctrl+E)">Export</button>
         </div>
@@ -147,6 +148,16 @@
     </div>
   </div>
 
+  <div id="task-modal" class="modal hidden">
+    <div id="task-modal-card" class="modal-card">
+      <div id="task-modal-title" class="modal-title">Open file</div>
+      <div id="task-modal-msgbox" class="msgbox">
+        <div id="task-modal-message" class="modal-text"></div>
+      </div>
+      <div id="task-modal-bar" class="progress-track"><div id="task-modal-fill" class="progress-fill"></div></div>
+    </div>
+  </div>
+
   <div id="convert-modal" class="modal hidden">
     <div id="convert-modal-card" class="modal-card">
 
@@ -226,6 +237,39 @@
       <div class="btn-group btn-group--end">
         <button id="confirm-cancel" class="btn btn--sm btn--danger">Cancel</button>
         <button id="confirm-ok" class="btn btn--sm btn--primary">Overwrite</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="concat-modal" class="modal hidden">
+    <div id="concat-card" class="modal-card modal-card--wide">
+      <div class="concat-header">
+        <div id="concat-title" class="modal-title">Join files</div>
+        <div class="btn-group">
+          <button id="concat-close" class="btn btn--sm">Close</button>
+        </div>
+      </div>
+      <div id="concat-files-box" class="concat-files hidden">
+        <div id="concat-list" class="concat-list"></div>
+        <div id="concat-result" class="concat-result hidden">
+          <div id="concat-result-name" class="concat-result-name"></div>
+        </div>
+      </div>
+      <div class="concat-actions">
+        <div class="btn-group">
+          <button id="concat-cancel" class="btn btn--sm btn--danger hidden" title="Cancel">Cancel</button>
+          <button id="concat-clear" class="btn btn--sm hidden" title="Clear list">Clear</button>
+        </div>
+        <div class="btn-group">
+          <button id="concat-open" class="btn btn--sm btn--accent">Open files</button>
+          <button id="concat-saveas" class="btn btn--sm btn--accent hidden">Save as</button>
+          <button id="concat-join" class="btn btn--sm btn--primary hidden">Join files</button>
+          <button id="concat-insert" class="btn btn--sm btn--primary hidden">Insert in editor</button>
+        </div>
+      </div>
+      <div id="concat-progress" class="concat-progress">
+        <div class="progress-track"><div id="concat-fill" class="progress-fill"></div></div>
+        <div id="concat-status" class="modal-text"></div>
       </div>
     </div>
   </div>

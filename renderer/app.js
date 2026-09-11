@@ -468,6 +468,12 @@ function safeFileName(name) {
   return s || 'part';
 }
 
+const VIDEO_EXT_RE = /\.(mp4|mov|mkv|webm|m4v|avi|ts|mts|m2ts|flv|wmv)$/i;
+
+function isVideoFile(p) {
+  return typeof p === 'string' && VIDEO_EXT_RE.test(p);
+}
+
 function ellipsizeMidFit(s, avail, font) {
   if (!s) return s;
   const cv = ellipsizeMidFit._cv || (ellipsizeMidFit._cv = document.createElement('canvas').getContext('2d'));
@@ -608,7 +614,7 @@ class Timeline {
     this._cornerRAF = null;
 
     this.canvas.addEventListener('mousedown', (e) => this.onDown(e));
-    this.canvas.addEventListener('mousemove', (e) => this.onMove(e));
+    window.addEventListener('mousemove', (e) => this.onMove(e));
     window.addEventListener('mouseup', (e) => this.onUp(e));
     this.canvas.addEventListener('mouseleave', () => {
       if (this.hoverX != null) {
@@ -750,8 +756,11 @@ class Timeline {
 
       let mode = 'pan';
       let grabOff = 0;
-      if (x >= bodyL - tol && x <= bodyL + caret + tol) { mode = 'left'; grabOff = x - bodyL; }
-      else if (x >= bodyR - caret - tol && x <= bodyR + tol) { mode = 'right'; grabOff = bodyR - x; }
+      if (x >= bodyL - tol && x <= bodyL + caret + tol) mode = 'left';
+      else if (x >= bodyR - caret - tol && x <= bodyR + tol) mode = 'right';
+      app.beginDragCursor(mode === 'pan' ? 'grabbing' : 'ew-resize');
+      if (mode === 'left') grabOff = x - bodyL;
+      else if (mode === 'right') grabOff = bodyR - x;
       else if (x < bodyL - tol || x > bodyR + tol) {
         this.setViewCenter(this.barTime(x, barW));
         this.needsRender = true;
@@ -778,6 +787,7 @@ class Timeline {
       const up = () => {
         this.updateScrollbar();
         if (this.thumbEl) this.thumbEl.classList.remove('dragging');
+        app.endDragCursor();
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
       };
@@ -1065,6 +1075,7 @@ toggleSelectSegment(i) {
     if (app.cancelStepPause) app.cancelStepPause();
     const bubbleWasOpen = app && app._markerBubbleId;
     if (this.onMarkerDragStart) this.onMarkerDragStart();
+    app.beginDragCursor();
     
     
     const pan = e.button === 1 || region === null;
@@ -1180,6 +1191,7 @@ toggleSelectSegment(i) {
   }
 
   onUp() {
+    app.endDragCursor();
     if (this.drag && this.drag.mode === 'scrub' && this.onScrubEnd) this.onScrubEnd();
     const wasMarker = this.drag && this.drag.mode === 'marker';
     const markerId = wasMarker ? this.drag.id : null;
@@ -1902,6 +1914,32 @@ const app = {
     _segmentMarkerId: null
   },
 
+  _dragCursorStack: [],
+  _concatFiles: [],
+  _concatResult: null,
+  _concatBusy: false,
+  _concatDragIndex: null,
+  _concatDropIndex: null,
+  _concatDropBefore: false,
+  _concatDragDir: null,
+  _concatDragLastY: null,
+
+  beginDragCursor(cursor = 'grabbing') {
+    const cls = 'drag-cursor-' + cursor;
+    this._dragCursorStack.push(cls);
+    document.body.classList.add(cls);
+  },
+
+  endDragCursor() {
+    const cls = this._dragCursorStack.pop();
+    if (cls) document.body.classList.remove(cls);
+  },
+
+  clearDragCursors() {
+    for (const cls of this._dragCursorStack) document.body.classList.remove(cls);
+    this._dragCursorStack.length = 0;
+  },
+
   init() {
     const sbStyle = document.documentElement.style;
     sbStyle.setProperty('--sb-pad', SCROLLBAR.pad + 'px');
@@ -2090,22 +2128,58 @@ const app = {
   bindDragDrop() {
     let depth = 0;
     window.addEventListener('dragover', (e) => e.preventDefault());
-    window.addEventListener('dragenter', () => { depth++; if (!this.isModalOpen()) document.body.classList.add('drag-over'); });
-    window.addEventListener('dragleave', () => { depth--; if (depth <= 0) document.body.classList.remove('drag-over'); });
+    window.addEventListener('dragenter', () => {
+      depth++;
+      const cm = $('concat-modal');
+      if (cm && !cm.classList.contains('hidden')) cm.classList.add('drag-over');
+      if (!this.isModalOpen()) document.body.classList.add('drag-over');
+    });
+    window.addEventListener('dragleave', () => {
+      depth--;
+      if (depth <= 0) {
+        document.body.classList.remove('drag-over');
+        const cm = $('concat-modal');
+        if (cm) cm.classList.remove('drag-over');
+      }
+    });
     window.addEventListener('drop', (e) => {
       e.preventDefault();
       depth = 0;
       document.body.classList.remove('drag-over');
-      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!f) return;
-      const p = window.keycut.getFilePath ? window.keycut.getFilePath(f) : null;
+      const cm = $('concat-modal');
+      if (cm) cm.classList.remove('drag-over');
+      const dt = e.dataTransfer;
+      if (!dt || !dt.files || !dt.files.length) return;
+      if (cm && !cm.classList.contains('hidden')) {
+        const paths = [];
+        for (const f of dt.files) {
+          const p = window.keycut.getFilePath ? window.keycut.getFilePath(f) : null;
+          if (p) paths.push(p);
+        }
+        if (paths.length && !this._concatBusy) this.concatAddPaths(paths);
+        return;
+      }
+      const paths = [];
+      for (const f of dt.files) {
+        const p = window.keycut.getFilePath ? window.keycut.getFilePath(f) : null;
+        if (p && (isVideoFile(p) || /\.kc$/i.test(p))) paths.push(p);
+      }
+      if (paths.length > 1) {
+        this.concatAddPaths(paths);
+        $('concat-modal').classList.remove('hidden');
+        this.closeFind();
+        return;
+      }
+      const p = paths[0];
       if (p) this.handleDroppedFile(p);
+      else if (dt.files.length) this.setStatus('Unsupported file type');
     });
   },
 
   async handleDroppedFile(p) {
     const cs = this._convertState;
     if (cs === 'analyzing' || cs === 'converting' || cs === 'done') { this.setStatus('Busy: conversion in progress'); return; }
+    if (!isVideoFile(p) && !/\.kc$/i.test(p)) { this.setStatus('Unsupported file type'); return; }
     const lm = $('locate-modal');
     if (lm && !lm.classList.contains('hidden')) {
       if (this._locateVerify) this._locateVerify(p);
@@ -2148,6 +2222,17 @@ const app = {
       if (e.target === $('help-modal')) $('help-modal').classList.add('hidden');
     });
     $('btn-set-keys').addEventListener('click', () => this.setKeys());
+    $('btn-concat').addEventListener('click', () => this.concatVideos());
+    $('concat-open').addEventListener('click', () => this.concatAddFiles());
+    $('concat-clear').addEventListener('click', () => this.concatClearFiles());
+    $('concat-join').addEventListener('click', () => this.concatJoin());
+    $('concat-saveas').addEventListener('click', () => this.concatSaveAs());
+    $('concat-insert').addEventListener('click', () => this.concatInsert());
+    $('concat-cancel').addEventListener('click', () => this.concatCancel());
+    $('concat-close').addEventListener('click', () => $('concat-modal').classList.add('hidden'));
+    $('concat-modal').addEventListener('click', (e) => {
+      if (e.target === $('concat-modal') && !this._concatBusy) $('concat-modal').classList.add('hidden');
+    });
     $('convert-cancel').addEventListener('click', () => this.cancelConvert());
     $('convert-place').addEventListener('click', () => this.placeVideo(false));
     $('convert-action').addEventListener('click', () => this.convertAction());
@@ -2474,12 +2559,36 @@ guardTarget(t) {
         this.releaseFrameNav();
       }
     });
-    window.addEventListener('blur', () => this.timeline.setCtrlHeld(false));
+    window.addEventListener('blur', () => { this.timeline.setCtrlHeld(false); app.clearDragCursors(); });
   },
 
   setStatus(text, spin = false) {
     $('status-text').textContent = text;
     $('spinner').classList.toggle('hidden', !spin);
+  },
+
+  showTaskModal({ title = 'Open file', message = '', indeterminate = true, progress = 0 } = {}) {
+    $('task-modal-title').textContent = title;
+    $('task-modal-message').textContent = message;
+    const fill = $('task-modal-fill');
+    fill.classList.toggle('indeterminate', indeterminate);
+    fill.style.width = Math.round(progress * 100) + '%';
+    $('task-modal').classList.remove('hidden');
+  },
+
+  updateTaskModal({ message, progress, indeterminate }) {
+    if (message != null) $('task-modal-message').textContent = message;
+    const fill = $('task-modal-fill');
+    if (indeterminate != null) fill.classList.toggle('indeterminate', indeterminate);
+    if (progress != null) fill.style.width = Math.round(progress * 100) + '%';
+  },
+
+  hideTaskModal() {
+    $('task-modal').classList.add('hidden');
+  },
+
+  taskModalOpen() {
+    return !$('task-modal').classList.contains('hidden');
   },
 
   markerBubble(m) {
@@ -2975,6 +3084,8 @@ guardTarget(t) {
   
   async handleCloseRequest() {
     if (this.state.exporting) return;
+    if (this._concatBusy) return;
+    if (this.taskModalOpen()) return;
     if (!this.state.dirty) { window.keycut.forceClose(); return; }
     const choice = await window.keycut.confirmClose();
     if (choice === 'save') {
@@ -2987,9 +3098,9 @@ guardTarget(t) {
   },
 
   async loadSource(path) {
-    this.setStatus('Analyzing…', true);
+    this.showTaskModal({ title: 'Open file', message: 'Analyzing…', indeterminate: true });
     const meta = await window.keycut.probeVideo(path);
-    this.setStatus('Analyzing…', false);
+    this.hideTaskModal();
     if (!meta || meta.error) {
       this.setStatus('Error: ' + (meta && meta.error ? meta.error : 'failed to analyze video'));
       return;
@@ -3320,7 +3431,7 @@ frameDeleted(t) {
   },
 
   isModalOpen() {
-    return ['help-modal', 'export-modal', 'export-settings-modal', 'locate-modal', 'convert-modal', 'confirm-modal'].some((id) => !$(id).classList.contains('hidden'));
+    return ['help-modal', 'export-modal', 'export-settings-modal', 'locate-modal', 'convert-modal', 'confirm-modal', 'task-modal', 'concat-modal'].some((id) => !$(id).classList.contains('hidden'));
   },
 
   async toggleFind() {
@@ -3739,18 +3850,18 @@ releaseFrameNav() {
       window.keycut.setWindowBounds(data.winBounds);
     }
 
-    this.setStatus('Analyzing source video…', true);
+    this.showTaskModal({ title: 'Open file', message: 'Analyzing source video…', indeterminate: true });
     let meta = await window.keycut.probeVideo(data.src);
-    this.setStatus('', false);
+    this.hideTaskModal();
     if (!meta || meta.error) {
       const exists = await window.keycut.fileExists(data.src);
       if (!exists) {
         const located = await this.locateSource(data);
         if (!located) return;
         data.src = located.path;
-        this.setStatus('Analyzing source video…', true);
+        this.showTaskModal({ title: 'Open file', message: 'Analyzing source video…', indeterminate: true });
         meta = await window.keycut.probeVideo(data.src);
-        this.setStatus('', false);
+        this.hideTaskModal();
         if (!meta || meta.error) {
           this.setStatus('Source video missing: ' + data.src + '. Please open the original video file.');
           return;
@@ -4124,6 +4235,263 @@ releaseFrameNav() {
     window.keycut.exportCancel();
   },
 
+  async concatVideos() {
+    this.closeFind();
+    $('concat-modal').classList.remove('hidden');
+    this.renderConcat();
+  },
+
+  async concatAddFiles() {
+    if (this._concatBusy) return;
+    const files = await window.keycut.chooseFiles();
+    if (!files || !files.length) return;
+    this.concatAddPaths(files);
+  },
+
+  concatAddPaths(paths) {
+    if (!Array.isArray(paths) || !paths.length) return;
+    const filtered = paths.filter(isVideoFile);
+    if (!filtered.length) return;
+    if (filtered.length > 1) {
+      this._concatFiles = [];
+    } else {
+      const p = filtered[0];
+      if (this._concatFiles.some((f) => f.path === p)) { this.renderConcat(); return; }
+    }
+    this._concatResult = null;
+    for (const p of filtered) {
+      this._concatFiles.push({ path: p, name: p.split(/[\\/]/).pop() });
+    }
+    this._concatFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    this.renderConcat();
+  },
+
+  concatClearFiles() {
+    this._concatFiles = [];
+    this._concatResult = null;
+    this.renderConcat();
+  },
+
+  concatRemoveFile(index) {
+    this._concatFiles.splice(index, 1);
+    this.renderConcat();
+  },
+
+  concatMove(from, to) {
+    if (to < 0 || to > this._concatFiles.length - 1 + 1) return;
+    const [item] = this._concatFiles.splice(from, 1);
+    this._concatFiles.splice(to, 0, item);
+    this._concatResult = null;
+    this.renderConcat();
+    this.flashConcatRow(to);
+  },
+
+  flashConcatRow(index) {
+    const rows = document.querySelectorAll('.concat-item');
+    const row = rows[index];
+    if (!row) return;
+    row.classList.add('flash');
+    clearTimeout(this._concatFlashTimer);
+    this._concatFlashTimer = setTimeout(() => row.classList.remove('flash'), 900);
+  },
+
+  setConcatDropHint(index, before) {
+    this._concatDropIndex = index;
+    this._concatDropBefore = before;
+    const rows = document.querySelectorAll('.concat-item');
+    rows.forEach((r, i) => {
+      r.classList.remove('drop-before', 'drop-after');
+      if (i === index && i !== this._concatDragIndex) r.classList.add(before ? 'drop-before' : 'drop-after');
+    });
+  },
+
+  clearConcatDropHints() {
+    this._concatDropIndex = null;
+    this._concatDropBefore = false;
+    document.querySelectorAll('.concat-item').forEach((r) => r.classList.remove('drop-before', 'drop-after'));
+  },
+
+  concatDragScroll(e) {
+    const list = $('concat-list');
+    if (!list) return;
+    const rect = list.getBoundingClientRect();
+    const zone = 36;
+    if (e.clientY < rect.top + zone) {
+      list.scrollTop -= 24;
+    } else if (e.clientY > rect.bottom - zone) {
+      list.scrollTop += 24;
+    }
+  },
+
+  renderConcat() {
+    const list = $('concat-list');
+    list.innerHTML = '';
+    const filesBox = $('concat-files-box');
+    if (!this._concatFiles.length) {
+      filesBox.classList.remove('hidden');
+      const empty = document.createElement('div');
+      empty.className = 'concat-empty';
+      empty.textContent = 'No files. Click or drop to add.';
+      empty.addEventListener('click', () => this.concatAddFiles());
+      empty.addEventListener('dragover', (e) => { e.preventDefault(); empty.classList.add('drag-over'); });
+      empty.addEventListener('dragleave', () => empty.classList.remove('drag-over'));
+      empty.addEventListener('drop', (e) => {
+        e.preventDefault();
+        empty.classList.remove('drag-over');
+        if (this._concatBusy) return;
+        const paths = [];
+        for (const f of e.dataTransfer.files) {
+          const p = window.keycut.getFilePath ? window.keycut.getFilePath(f) : null;
+          if (p) paths.push(p);
+        }
+        if (paths.length) this.concatAddPaths(paths);
+      });
+      list.appendChild(empty);
+    } else {
+      filesBox.classList.remove('hidden');
+      this._concatFiles.forEach((f, i) => {
+        const row = document.createElement('div');
+        row.className = 'concat-item';
+        row.draggable = !this._concatBusy;
+        row.dataset.index = i;
+        row.innerHTML = '<span class="concat-idx">' + (i + 1) + '</span><span class="concat-name" title="' + f.path.replace(/"/g, '&quot;') + '"></span><button class="btn btn--xs btn--danger concat-del" title="Remove">✕</button>';
+        row.querySelector('.concat-name').textContent = f.name;
+        row.querySelector('.concat-del').addEventListener('click', (e) => { e.stopPropagation(); this.concatRemoveFile(i); });
+        row.addEventListener('dragstart', (e) => { if (this._concatBusy) { e.preventDefault(); return; } this._concatDragIndex = i; this._concatDragDir = null; this._concatDragLastY = e.clientY; row.classList.add('dragging'); });
+        row.addEventListener('dragend', () => { row.classList.remove('dragging'); this._concatDragIndex = null; this._concatDragDir = null; this._concatDragLastY = null; this.clearConcatDropHints(); });
+        row.addEventListener('dragover', (e) => {
+          if (this._concatBusy) return;
+          if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) return;
+          e.preventDefault();
+          const delta = e.clientY - this._concatDragLastY;
+          if (Math.abs(delta) > 2) this._concatDragDir = delta < 0 ? -1 : 1;
+          this._concatDragLastY = e.clientY;
+          if (this._concatDragDir == null) return;
+          this.concatDragScroll(e);
+          const before = this._concatDragDir === -1;
+          this.setConcatDropHint(i, before);
+        });
+        row.addEventListener('drop', (e) => {
+          if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+            if (this._concatBusy) return;
+            const paths = [];
+            for (const f of e.dataTransfer.files) {
+              const p = window.keycut.getFilePath ? window.keycut.getFilePath(f) : null;
+              if (p) paths.push(p);
+            }
+            if (paths.length) { this.concatAddPaths(paths); }
+            return;
+          }
+          e.preventDefault();
+          const from = this._concatDragIndex;
+          const to = this._concatDropIndex;
+          this.clearConcatDropHints();
+          if (from == null || to == null) return;
+          const before = this._concatDragDir === -1;
+          let target = before ? to : to + 1;
+          if (from < target) target--;
+          if (target === from) return;
+          this.concatMove(from, target);
+        });
+        list.appendChild(row);
+      });
+      list.addEventListener('dragleave', (e) => {
+        if (e.relatedTarget && list.contains(e.relatedTarget)) return;
+        this.clearConcatDropHints();
+      });
+    }
+    $('concat-result').classList.toggle('hidden', !this._concatResult);
+    $('concat-saveas').classList.toggle('hidden', !this._concatResult);
+    $('concat-insert').classList.toggle('hidden', !this._concatResult);
+    const st = $('concat-status');
+    if (st) { st.textContent = ''; st.classList.remove('concat-status--error'); }
+    if (this._concatResult) {
+      $('concat-result-name').textContent = this._concatResult;
+    }
+    $('concat-clear').classList.toggle('hidden', !this._concatFiles.length || this._concatBusy);
+    $('concat-close').disabled = this._concatBusy;
+    $('concat-open').disabled = this._concatBusy;
+    $('concat-saveas').disabled = this._concatBusy;
+    $('concat-insert').disabled = this._concatBusy;
+    $('concat-cancel').classList.toggle('hidden', !this._concatBusy);
+    $('concat-join').classList.toggle('hidden', this._concatFiles.length < 2 || !!this._concatResult);
+    $('concat-join').disabled = this._concatBusy;
+  },
+
+  async concatJoin() {
+    if (this._concatBusy || this._concatFiles.length < 2) return;
+    this._concatBusy = true;
+    this._concatResult = null;
+    this.renderConcat();
+    this.setConcatProgress(0);
+    const unsub = window.keycut.onConcatProgress((p) => {
+      if (p.progress != null) this.setConcatProgress(p.progress);
+    });
+    const res = await window.keycut.concatJoin({ files: this._concatFiles.map((f) => f.path) });
+    unsub();
+    this._concatBusy = false;
+    this.renderConcat();
+    if (!res || !res.ok) {
+      const msg = (res && res.error) || 'unknown error';
+      if (msg !== 'Cancelled') {
+        this.setStatus('Join failed: ' + msg);
+        const st = $('concat-status');
+        if (st) { st.textContent = msg; st.classList.add('concat-status--error'); }
+      }
+      this.setConcatProgress(0);
+      return;
+    }
+    const st = $('concat-status');
+    if (st) { st.textContent = ''; st.classList.remove('concat-status--error'); }
+    this._concatResult = res.out;
+    this.setConcatProgress(0);
+    this.renderConcat();
+  },
+
+  async concatCancel() {
+    if (!this._concatBusy) return;
+    await window.keycut.concatCancel();
+    this.setStatus('Join cancelled.');
+  },
+
+  setConcatProgress(p) {
+    const fill = $('concat-fill');
+    if (!fill) return;
+    if (p <= 0) fill.style.transition = 'none';
+    else fill.style.transition = '';
+    fill.style.width = Math.round(Math.max(0, Math.min(1, p)) * 100) + '%';
+  },
+
+  async concatSaveAs() {
+    if (!this._concatResult) return;
+    const defaultName = this._concatResult.split(/[\\/]/).pop();
+    const outPath = await window.keycut.saveExportDialog(defaultName, false);
+    if (!outPath) return;
+    const ok = await window.keycut.concatCopyOutput({ from: this._concatResult, to: outPath });
+    if (!ok || !ok.ok) { this.setStatus('Save failed'); return; }
+    await window.keycut.concatRemoveOutput({ out: this._concatResult });
+    this._concatResult = outPath;
+    this.setStatus('Saved.');
+    this.renderConcat();
+  },
+
+  async concatInsert() {
+    if (!this._concatResult) return;
+    const hasContent = this.model && this.model.cuts && this.model.cuts.length > 1;
+    if (hasContent) {
+      const ok = await this.confirmDialog('This will replace the current timeline. Continue?');
+      if (!ok) return;
+    }
+    const out = this._concatResult;
+    const cursor = 0;
+    const pps = null;
+    const vstart = 0;
+    this.loadPlacedVideo(out, [0, this.state.duration], [false], [], cursor, pps, vstart, null);
+    this._concatResult = null;
+    this.renderConcat();
+    $('concat-modal').classList.add('hidden');
+  },
+
   setKeys() {
     if (!this.state.source) return;
     if (this.video && !this.video.paused) this.pause();
@@ -4287,9 +4655,9 @@ releaseFrameNav() {
   },
 
   async loadPlacedVideo(path, cuts, deleted, markers, cursor, pps, vstart, afterLoad) {
-    this.setStatus('Analyzing…', true);
+    this.showTaskModal({ title: 'Open file', message: 'Analyzing…', indeterminate: true });
     const meta = await window.keycut.probeVideo(path);
-    this.setStatus('Analyzing…', false);
+    this.hideTaskModal();
     if (!meta || meta.error) {
       this.setStatus('Error: ' + (meta && meta.error ? meta.error : 'failed to analyze converted video'));
       return;
