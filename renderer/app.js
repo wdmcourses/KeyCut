@@ -2122,7 +2122,6 @@ const app = {
     $('export-compress-toggle').addEventListener('click', () => this.toggleExportCompress());
     $('export-blocks-separate').addEventListener('change', () => {
       this.state.exportSettings.blocks = $('export-blocks-separate').checked;
-      this.persistExportSettings();
     });
     $('confirm-ok').addEventListener('click', () => this._confirmResolve(true));
     $('confirm-cancel').addEventListener('click', () => this._confirmResolve(false));
@@ -3810,7 +3809,6 @@ releaseFrameNav() {
     btn.classList.toggle('btn--primary', this.state.exportSettings.compress);
     btn.textContent = this.state.exportSettings.compress ? 'Compress: ON' : 'Compress: OFF';
     $('export-resolution-row').classList.toggle('hidden', !this.state.exportSettings.compress);
-    this.persistExportSettings();
   },
 
   setExportResolution(res) {
@@ -3818,16 +3816,6 @@ releaseFrameNav() {
     for (const b of document.querySelectorAll('.res-opt')) {
       b.classList.toggle('btn--primary', b.dataset.res === res);
     }
-    this.persistExportSettings();
-  },
-
-  persistExportSettings() {
-    if (!this.state.projectPath) return;
-    const wasDirty = this.state.dirty;
-    this.saveProjectTo(this.state.projectPath).then(() => {
-      this.state.dirty = wasDirty;
-      this.$labelUpdate();
-    }).catch(() => {});
   },
 
   async doExport() {
