@@ -2026,7 +2026,7 @@ const app = {
       this.timeline.needsRender = true;
       this.timeline.tick();
       this.model.snapshot();
-      this.syncExportButton();
+      this.timeline.onMarkersChange();
     });
     $('marker-delete').addEventListener('click', () => {
       const id = this._markerBubbleId;
@@ -2576,13 +2576,16 @@ guardTarget(t) {
   },
 
   updateStats() {
-    const s = this.model.stats();
-    const keptPct = this.state.duration > 0 ? Math.round((s.kept / this.state.duration) * 100) : 0;
+    const runs = this.exportableRuns();
+    let kept = 0;
+    for (const [s, e] of runs) kept += e - s;
+    const keptPct = this.state.duration > 0 ? Math.round((kept / this.state.duration) * 100) : 0;
+    const cuts = this.model.cuts.length - 1;
     const markers = (this.timeline && this.timeline.markers && this.timeline.markers.length) || 0;
     $('stats').innerHTML =
-      `<span>Cuts <b>${s.cuts}</b></span>` +
+      `<span>Cuts <b>${cuts}</b></span>` +
       (markers ? `<span>Markers <b>${markers}</b></span>` : '') +
-      `<span>Kept <b>${fmtTime(s.kept, false)}</b> / ${fmtTime(this.state.duration, false)} <b>(${keptPct}%)</b></span>`;
+      `<span>Kept <b>${fmtTime(kept, false)}</b> / ${fmtTime(this.state.duration, false)} <b>(${keptPct}%)</b></span>`;
   },
 
   updateTimeDisplay() {
