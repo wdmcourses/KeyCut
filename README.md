@@ -21,11 +21,13 @@ output keeps the original quality and the whole operation is fast.</p>
 
 ## Features
 
-- Lossless cutting and splicing, no re-encoding, no quality loss
-- Split, delete, restore and merge segments directly on the timeline
-- Export the kept segments as a single file
-- Reads most container formats: MP4, MOV, MKV, WebM, AVI, TS/M2TS, FLV and more
-- Portable, no installation required – FFmpeg is bundled
+- Lossless cutting and splicing – cuts snap to keyframes, exports are a direct copy
+- Export the kept segments as a single file, losslessly
+- Export each marker block as its own file
+- Split, delete, restore and merge segments directly on the timeline; resize edges, multi-select
+- Optional compression: universal x264 preset with resolution presets – Origin / 720p / 1080p / 1440p / 2160p
+- Timeline with audio waveform, keyframe snapping, zoom and frame stepping
+- Set keys: re-key a clip at 2 / 6 / 10 keyframes per second for frame-level precision
 
 ## Keyboard
 
