@@ -1,32 +1,15 @@
-
-
-
-
-
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const OUT_DIR = path.join(ROOT, 'vendor', 'ffmpeg');
-const TMP_ZIP = path.join(ROOT, 'vendor', 'ffmpeg-download.zip');
-const TMP_EXTRACT = path.join(ROOT, 'vendor', '.ffmpeg-extract');
-
-
+const VENDOR = path.join(ROOT, 'vendor');
+const ARCHIVE = path.join(VENDOR, 'vendor.7z');
 
 const PLATFORMS = {
-  win32: {
-    assetPart: 'win64-gpl.zip',
-    bin: 'ffmpeg.exe', kind: 'zip'
-  },
-  linux: {
-    url: 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz',
-    bin: 'ffmpeg', kind: 'xz'
-  },
-  darwin: {
-    url: 'https://evermeet.cx/ffmpeg/getrelease/zip',
-    bin: 'ffmpeg', kind: 'zip'
-  }
+  win32:  { bin: 'ffmpeg.exe', rcedit: true },
+  linux:  { bin: 'ffmpeg' },
+  darwin: { bin: 'ffmpeg' }
 };
 
 function targetPlatform() {
@@ -41,82 +24,21 @@ function targetPlatform() {
   return p;
 }
 
-async function download(url, outFile) {
-  process.stdout.write('Downloading ' + url + ' ...\n');
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
-  const buf = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(outFile, buf);
-  process.stdout.write('Downloaded ' + (buf.length / 1048576).toFixed(1) + ' MB\n');
-}
-
-async function btbUrl(assetPart) {
-  const res = await fetch('https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest');
-  if (!res.ok) throw new Error('HTTP ' + res.status + ' for BtbN release');
-  const data = await res.json();
-  const asset = data.assets.find((a) => a.name.includes(assetPart));
-  if (!asset) throw new Error('ffmpeg asset not found: ' + assetPart);
-  return asset.browser_download_url;
-}
-
-async function main() {
+function main() {
   const platform = targetPlatform();
   const cfg = PLATFORMS[platform];
-  const outDir = path.join(OUT_DIR, platform);
-  const dest = path.join(outDir, cfg.bin);
-  if (fs.existsSync(dest)) {
-    console.log('ffmpeg already present:', dest);
+  const dest = path.join(VENDOR, 'ffmpeg', platform, cfg.bin);
+  const rcedit = path.join(VENDOR, 'rcedit', 'rcedit-x64.exe');
+  if (fs.existsSync(dest) && (!cfg.rcedit || fs.existsSync(rcedit))) {
+    console.log('binaries already present:', dest);
     return;
   }
-
-  fs.mkdirSync(outDir, { recursive: true });
-  try {
-    const url = cfg.assetPart ? await btbUrl(cfg.assetPart) : cfg.url;
-    await download(url, TMP_ZIP);
-
-    fs.rmSync(TMP_EXTRACT, { recursive: true, force: true });
-    fs.mkdirSync(TMP_EXTRACT, { recursive: true });
-
-    let extracted = false;
-    try {
-      
-      
-      const args = cfg.kind === 'xz'
-        ? ['-xJf', path.relative(ROOT, TMP_ZIP), '-C', path.relative(ROOT, TMP_EXTRACT)]
-        : ['-xf', path.relative(ROOT, TMP_ZIP), '-C', path.relative(ROOT, TMP_EXTRACT)];
-      execFileSync('tar', args, { cwd: ROOT, stdio: 'ignore' });
-      extracted = true;
-    } catch {
-      try {
-        execFileSync('powershell', ['-NoProfile', '-Command', 'Expand-Archive -Path "' + TMP_ZIP + '" -DestinationPath "' + TMP_EXTRACT + '" -Force'], { stdio: 'ignore' });
-        extracted = true;
-      } catch {
-        
-      }
-    }
-    if (!extracted) throw new Error('failed to extract the ffmpeg archive');
-
-    
-    const found = [];
-    (function walk(dir) {
-      for (const e of fs.readdirSync(dir)) {
-        const p = path.join(dir, e);
-        const st = fs.statSync(p);
-        if (st.isDirectory()) walk(p);
-        else if (e === cfg.bin) found.push(p);
-      }
-    })(TMP_EXTRACT);
-
-    if (!found.length) throw new Error(cfg.bin + ' not found in the archive');
-    fs.copyFileSync(found[0], dest);
-    process.stdout.write('Installed ' + dest + '\n');
-  } finally {
-    fs.rmSync(TMP_ZIP, { force: true });
-    fs.rmSync(TMP_EXTRACT, { recursive: true, force: true });
-  }
+  if (!fs.existsSync(ARCHIVE)) throw new Error('vendor/vendor.7z not found');
+  const r = spawnSync('7z', ['x', '-y', '-o' + path.relative(ROOT, VENDOR), path.relative(ROOT, ARCHIVE)], { cwd: ROOT, stdio: 'inherit' });
+  if (r.status !== 0) throw new Error('7z extraction failed for ' + path.relative(ROOT, ARCHIVE));
+  if (!fs.existsSync(dest)) throw new Error(dest + ' not found after extraction');
+  if (cfg.rcedit && !fs.existsSync(rcedit)) throw new Error(rcedit + ' not found after extraction');
+  console.log('Installed from archive:', dest);
 }
 
-main().catch((err) => {
-  console.error('get-ffmpeg failed:', err.message);
-  process.exit(1);
-});
+main();

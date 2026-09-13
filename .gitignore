@@ -1,7 +1,6 @@
 node_modules/
 dist/
 userData/
-tmp/
 vendor/ffmpeg/
 vendor/rcedit/
 vendor/electron-builds/

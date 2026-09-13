@@ -176,28 +176,24 @@ async function main() {
     if (platform === 'win32') {
       const iconIco = path.join(ROOT, 'assets', 'icon.ico');
       if (fs.existsSync(iconIco)) {
-        try {
-          const rceditDir = path.join(ROOT, 'vendor', 'rcedit');
-          fs.mkdirSync(rceditDir, { recursive: true });
-          const rcedit = path.join(rceditDir, 'rcedit-x64.exe');
-          if (!fs.existsSync(rcedit)) {
-            await download('https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe', rcedit);
-          }
-          const pkg = require(path.join(ROOT, 'package.json'));
-          execFileSync(rcedit, [
-            path.join(DIST, cfg.newBin),
-            '--set-icon', iconIco,
-            '--set-version-string', 'FileDescription', 'KeyCut',
-            '--set-version-string', 'ProductName', 'KeyCut',
-            '--set-version-string', 'CompanyName', 'KeyCut',
-            '--set-version-string', 'OriginalFilename', 'KeyCut.exe',
-            '--set-product-version', pkg.version,
-            '--set-file-version', pkg.version + '.0'
-          ], { stdio: 'ignore' });
-          console.log('App icon and version info embedded into', cfg.newBin);
-        } catch (err) {
-          console.warn('Could not embed the icon (non-fatal):', err.message);
+        const rcedit = path.join(ROOT, 'vendor', 'rcedit', 'rcedit-x64.exe');
+        if (!fs.existsSync(rcedit)) {
+          const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'get-ffmpeg.js'), '--platform=win32'], { stdio: 'inherit' });
+          if (r.status !== 0) throw new Error('rcedit setup failed');
         }
+        if (!fs.existsSync(rcedit)) throw new Error('rcedit not found: ' + rcedit);
+        const pkg = require(path.join(ROOT, 'package.json'));
+        execFileSync(rcedit, [
+          path.join(DIST, cfg.newBin),
+          '--set-icon', iconIco,
+          '--set-version-string', 'FileDescription', 'KeyCut',
+          '--set-version-string', 'ProductName', 'KeyCut',
+          '--set-version-string', 'CompanyName', 'KeyCut',
+          '--set-version-string', 'OriginalFilename', 'KeyCut.exe',
+          '--set-product-version', pkg.version,
+          '--set-file-version', pkg.version + '.0'
+        ], { stdio: 'inherit' });
+        console.log('App icon and version info embedded into', cfg.newBin);
       }
     }
   }
