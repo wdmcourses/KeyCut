@@ -1,7 +1,7 @@
 {
   "name": "keycut",
   "productName": "KeyCut",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Fast lossless video editor - cut and export without re-encoding",
   "main": "main.js",
   "scripts": {
