@@ -168,7 +168,7 @@ class CompatPlayer {
     if (this.spinner) this.spinner.style.display = on ? 'flex' : 'none';
   }
 
-  async afterSource(src, duration) {
+  async afterSource(src, duration, forceDummy) {
     if (!src) return;
     const gen = ++this._gen;
     this.src = src;
@@ -179,7 +179,7 @@ class CompatPlayer {
     this.showCompatMode(true);
     this._ensureOverlay();
     this.masterIsDummy = true;
-    if (this._masterCanShowReal()) {
+    if (this._masterCanShowReal() && !forceDummy) {
       this.masterIsDummy = false;
       this._muteMaster();
       if (this.app.scrubAudio && this.app.scrubAudio.src) {
@@ -294,7 +294,7 @@ class CompatPlayer {
     this._teardownStream();
     if (this.slave) this.slave.removeAttribute('src');
     this._unfreeze();
-    if (reason) this.app.setStatus('Compatibility playback unavailable: ' + reason);
+    if (reason && this.active && !this.stopping) this.app.setStatus('Compatibility playback unavailable: ' + reason);
   }
 
   async _readLoop() {
@@ -310,7 +310,7 @@ class CompatPlayer {
         }
         const chunk = await window.keycut.compatChunk();
         if (chunk == null) {
-          if (!gotChunk) {
+          if (!gotChunk && this.active && !this.stopping) {
             const err = await window.keycut.compatStderr();
             this._stopStreaming(err ? err.slice(-200) : 'ffmpeg produced no data');
           } else {
@@ -502,6 +502,7 @@ class CompatPlayer {
   activateFor(src) {
     if (!src || this.active || this.hasCompat(src)) return;
     this.flagSource(src);
+    if (this.app && this.app.onCompatTrigger) this.app.onCompatTrigger(src);
     this.afterSource(src, this.app.state.duration);
   }
 

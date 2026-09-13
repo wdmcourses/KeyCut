@@ -363,8 +363,13 @@ body {
 .concat-item .concat-idx { flex: 0 0 22px; color: var(--text-faint); font-size: 11px; text-align: center; }
 .concat-item .concat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; line-height: 1; }
 .concat-item .concat-del { flex: 0 0 auto; width: 16px; height: 16px; padding: 0; line-height: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; }
-.concat-result { display: flex; align-items: center; gap: 10px; }
-.concat-result-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-dim); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 4px 8px; }
+.concat-result, .convert-result { display: flex; align-items: center; gap: 8px; }
+.rename-field { position: relative; flex: 1; min-width: 0; height: 30px; }
+.concat-result-name, .convert-result-name { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; align-items: center; padding: 0 34px 0 9px; cursor: pointer; }
+.concat-result-name:hover, .convert-result-name:hover { border-color: var(--border-hi); }
+.concat-result-edit, .convert-result-edit { position: absolute; left: 0; top: 0; width: 100%; height: 30px; box-sizing: border-box; font-size: 13px; color: var(--text); background: var(--field-bg); border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 0 34px 0 9px; outline: none; }
+.rename-pencil { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; color: var(--text-faint); cursor: pointer; pointer-events: auto; z-index: 2; }
+.rename-pencil:hover { color: var(--text); }
 .concat-status--error { color: var(--danger-text) !important; }
 .concat-progress { display: flex; flex-direction: column; gap: 6px; }
 .concat-empty { position: relative; overflow: hidden; padding: 40px 14px; text-align: center; color: var(--text-faint); font-size: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm); cursor: pointer; user-select: none; }
@@ -1223,6 +1228,12 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
   gap: 10px;
   align-items: start;
 }
+.edit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
 #help-modal-close {
   align-self: flex-end;
   padding: 5px 14px;
@@ -1240,6 +1251,8 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
 .shortcut-group.g-history { background: rgba(200,150,255,.045); }
 .shortcut-group.g-project { background: rgba(90,220,220,.045); }
 .shortcut-group.g-general { background: rgba(220,220,120,.045); }
+.shortcut-group.g-tools { background: rgba(120,220,150,.045); }
+.edit-block .g-tools { margin-top: -2.5px; }
 .shortcut-group-title {
   font-size: 10.5px;
   font-weight: 700;
@@ -1284,6 +1297,14 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
   color: var(--text);
 }
 .shortcut-row .desc { text-align: left; }
+.shortcut-row--find { grid-template-columns: minmax(0, 1fr) auto; }
+.shortcut-row--find .keys {
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+  gap: 3px;
+}
+.shortcut-row--find .keys .kcombo { flex-basis: auto; }
 
 /* ---------- 15. Misc ---------- */
 

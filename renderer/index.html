@@ -14,13 +14,13 @@
         <div class="tl-panel-header">
           <span class="tl-panel-title">Timelines</span>
           <div class="btn-group">
-            <button id="tl-panel-dismiss" class="btn btn--sm" title="Close">Close</button>
+            <button id="tl-panel-close" class="btn btn--sm tl-panel-close" title="Close Project" disabled>Close Project</button>
           </div>
         </div>
         <button id="tl-add" class="btn btn--sm btn--accent">Add Files</button>
         <div id="tl-list" class="tl-list"></div>
         <div class="tl-panel-footer">
-          <button id="tl-panel-close" class="btn btn--sm tl-panel-close" title="Close Project" disabled>Close Project</button>
+          <button id="tl-panel-dismiss" class="btn btn--sm" title="Close panel">Close</button>
           <button id="tl-export-project" class="btn btn--sm btn--primary tl-export-project" title="Export the whole project">Export Project</button>
         </div>
       </div>
@@ -216,6 +216,13 @@
         <div id="convert-modal-message" class="modal-text"></div>
       </div>
       <div id="convert-modal-bar" class="progress-track"><div id="convert-modal-fill" class="progress-fill"></div></div>
+      <div id="convert-result" class="convert-result hidden">
+        <div class="rename-field">
+          <div id="convert-result-name" class="convert-result-name" title="Click to rename"></div>
+          <input id="convert-result-edit" class="convert-result-edit hidden" spellcheck="false" />
+          <span id="convert-result-pencil" class="rename-pencil" title="Rename"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 21h8"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span>
+        </div>
+      </div>
       <div id="convert-modal-buttons" class="btn-group btn-group--end">
         <button id="convert-cancel" class="btn btn--sm btn--danger" title="Cancel">Cancel</button>
         <button id="convert-action" class="btn btn--sm btn--primary" title="Convert"></button>
@@ -233,21 +240,26 @@
           <div class="shortcut-row"><span class="desc">Previous / Next block</span><span class="keys"><kbd>Shift</kbd>+<kbd>S</kbd> / <kbd>Shift</kbd>+<kbd>F</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Previous marker / start</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Next marker / end</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Find marker · next / prev</span><span class="keys"><span class="kcombo"><kbd>Ctrl</kbd>+<kbd>F</kbd> · <kbd>Enter</kbd></span><span class="kcombo"><kbd>Shift</kbd>+<kbd>Enter</kbd></span></span></div>
+          <div class="shortcut-row shortcut-row--find"><span class="desc">Find marker · next / prev</span><span class="keys"><span class="kcombo"><kbd>Ctrl</kbd>+<kbd>F</kbd> · <kbd>Enter</kbd></span><span class="kcombo"><kbd>Shift</kbd>+<kbd>Enter</kbd></span></span></div>
           <div class="shortcut-row"><span class="desc">Start / End of project</span><span class="keys"><kbd>Home</kbd> / <kbd>End</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Fit entire timeline</span><span class="keys"><kbd>0</kbd> / <kbd>1</kbd></span></div>
           <div class="shortcut-row"><span class="desc">20 seconds around caret</span><span class="keys"><kbd>2</kbd></span></div>
         </div>
-        <div class="shortcut-group g-edit">
-          <div class="shortcut-group-title">Editing</div>
-          <div class="shortcut-row"><span class="desc">Cut at caret</span><span class="keys"><kbd>C</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Delete segment</span><span class="keys"><kbd>X</kbd> / <kbd>Delete</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Restore segment</span><span class="keys"><kbd>R</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Merge segments</span><span class="keys"><kbd>E</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Multi-select segments</span><span class="keys"><kbd>Alt</kbd> + Click</span></div>
-          <div class="shortcut-row"><span class="desc">Resize segment edges</span><span class="keys"><kbd>Ctrl</kbd> + Hover</span></div>
-          <div class="shortcut-row"><span class="desc">Add marker at caret</span><span class="keys"><kbd>M</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Add / remove marker</span><span class="keys">Middle click</span></div>
+        <div class="edit-block">
+          <div class="shortcut-group g-edit">
+            <div class="shortcut-group-title">Editing</div>
+            <div class="shortcut-row"><span class="desc">Cut at caret</span><span class="keys"><kbd>C</kbd></span></div>
+            <div class="shortcut-row"><span class="desc">Delete segment</span><span class="keys"><kbd>X</kbd> / <kbd>Delete</kbd></span></div>
+            <div class="shortcut-row"><span class="desc">Restore segment</span><span class="keys"><kbd>R</kbd></span></div>
+            <div class="shortcut-row"><span class="desc">Merge segments</span><span class="keys"><kbd>E</kbd></span></div>
+            <div class="shortcut-row"><span class="desc">Multi-select segments</span><span class="keys"><kbd>Alt</kbd> + Click</span></div>
+            <div class="shortcut-row"><span class="desc">Resize segment edges</span><span class="keys"><kbd>Ctrl</kbd> + Hover</span></div>
+            <div class="shortcut-row"><span class="desc">Add marker at caret</span><span class="keys"><kbd>M</kbd></span></div>
+            <div class="shortcut-row"><span class="desc">Add / remove marker</span><span class="keys">Middle click</span></div>
+          </div>
+          <div class="shortcut-group g-tools">
+            <div class="shortcut-row"><span class="desc">Reanalyze current file</span><span class="keys"><kbd>F5</kbd></span></div>
+          </div>
         </div>
       </div>
       <button id="help-modal-close" class="btn">Close</button>
@@ -290,7 +302,11 @@
       <div id="concat-files-box" class="concat-files hidden">
         <div id="concat-list" class="concat-list"></div>
         <div id="concat-result" class="concat-result hidden">
-          <div id="concat-result-name" class="concat-result-name"></div>
+          <div class="rename-field">
+            <div id="concat-result-name" class="concat-result-name" title="Click to rename"></div>
+            <input id="concat-result-edit" class="concat-result-edit hidden" spellcheck="false" />
+            <span id="concat-result-pencil" class="rename-pencil" title="Rename"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 21h8"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span>
+          </div>
         </div>
       </div>
       <div class="concat-actions">

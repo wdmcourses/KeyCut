@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('keycut', {
   saveProject: (filePath, data) => ipcRenderer.invoke('project:save', { filePath, data }),
   loadProject: (filePath) => ipcRenderer.invoke('project:load', filePath),
   loadProjectTimeline: (filePath, id) => ipcRenderer.invoke('project:loadTimeline', { filePath, id }),
+  loadProjectTimelines: (filePath, ids) => ipcRenderer.invoke('project:loadTimelines', { filePath, ids }),
   resolveProjectSource: (projectPath, rel) => ipcRenderer.invoke('project:resolveSource', { projectPath, rel }),
 
   exportStart: (payload) => ipcRenderer.invoke('export:start', payload),

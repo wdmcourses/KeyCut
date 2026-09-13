@@ -126,13 +126,18 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('file:delete', async (_e, filePath) => {
     if (!filePath) return { ok: false, error: 'Missing path' };
-    try {
-      if (!fs.existsSync(filePath)) return { ok: true, missing: true };
-      await fs.promises.unlink(filePath);
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
+    if (!fs.existsSync(filePath)) return { ok: true, missing: true };
+    let lastErr = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await fs.promises.unlink(filePath);
+        return { ok: true };
+      } catch (err) {
+        lastErr = err;
+        if (attempt < 4) await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+      }
     }
+    return { ok: false, error: lastErr ? lastErr.message : 'Failed to delete file' };
   });
   registerIpc(() => mainWindow, APP_ROOT, TMP_DIR);
   cleanupTmp();

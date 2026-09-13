@@ -264,4 +264,28 @@ startRename(row, item, currentName) {
       this.el.scrollTop += 24;
     }
   }
+
+  scrollToItem(item) {
+    if (!item) return;
+    const rows = this.el.querySelectorAll('.fl-item');
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (this.isActive(item) && this.items[i] === item) {
+        const wrap = this.el;
+        const wr = wrap.getBoundingClientRect();
+        const rr = row.getBoundingClientRect();
+        const top = rr.top - wr.top;
+        const bottom = rr.bottom - wr.top;
+        const vis = wr.height;
+        const want = (vis - rr.height) / 2;
+        let target;
+        if (rr.height >= vis) target = top;
+        else if (top < want) target = 0;
+        else if (bottom > vis - want) target = wrap.scrollHeight - vis;
+        else return;
+        wrap.scrollTop = Math.max(0, Math.min(target, wrap.scrollHeight - vis));
+        return;
+      }
+    }
+  }
 };
