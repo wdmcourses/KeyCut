@@ -971,9 +971,9 @@ class Timeline {
     return null;
   }
 
-  setCursor(t, fromVideo = false) {
+  setCursor(t, fromVideo = false, noSnap = false) {
     const end = this.duration || 0;
-    t = endSnap(t, end, this.activeKeys || this.keyTimes, app && app.state ? app.state.fps : 0);
+    if (!noSnap) t = endSnap(t, end, this.activeKeys || this.keyTimes, app && app.state ? app.state.fps : 0);
     t = Math.min(Math.max(0, t), end);
     this.cursor = t;
     if (!fromVideo) app.seek(t);
@@ -1002,9 +1002,9 @@ toggleSelectSegment(i) {
     this.tick();
   }
 
-  extendSelectRange(i) {
+  extendSelectRange(i, anchorOverride) {
     if (!this.model || i < 0 || i >= this.model.deleted.length) return;
-    const anchor = this.activeIndex();
+    const anchor = anchorOverride != null ? anchorOverride : this.activeIndex();
     this.selected = [Math.min(anchor, i), Math.max(anchor, i)];
     this.selectedSet = null;
     this.selectedAnchor = anchor;
@@ -1168,7 +1168,8 @@ toggleSelectSegment(i) {
       }
       this.drag = { mode: 'scrub', lastX: x, moved: false, x, y, region };
       this.canvas.style.cursor = 'grabbing';
-      this.setCursor(this.xToTime(x));
+      if (e.shiftKey) this.drag.shiftFree = true;
+      this.setCursor(this.xToTime(x), false, !!(e.shiftKey));
       if (this.onScrub) this.onScrub(this.cursor);
       e.preventDefault();
       return;
@@ -1201,14 +1202,20 @@ toggleSelectSegment(i) {
       if (app.video && !app.video.paused) app.pause();
       const rawT = this.xToTime(x);
       let snapT = rawT;
+      const wantFree = !!(e.shiftKey && region === 'seg');
+      if (wantFree) {
+        this.drag.shiftFree = true;
+        this.drag.pendingSelect = this.model.segmentOf(rawT);
+        this.drag.pendingAnchor = this.activeIndex();
+      }
       if (region === 'seg') {
         const block = this.model.segmentOf(rawT);
-        snapT = prevKey(rawT, this.activeKeys || this.keyTimes);
-        if (e.altKey) this.toggleSelectSegment(block);
-        else if (e.shiftKey) this.extendSelectRange(block);
+        if (!wantFree) snapT = prevKey(rawT, this.activeKeys || this.keyTimes);
+        if (e.ctrlKey || e.metaKey) this.toggleSelectSegment(block);
+        else if (e.shiftKey) this.drag.pendingSelect = this.drag.pendingSelect != null ? this.drag.pendingSelect : block;
         else this.clearSelection();
       }
-      this.setCursor(snapT);
+      this.setCursor(snapT, false, wantFree);
       if (this.onScrub) this.onScrub(this.cursor);
     }
     e.preventDefault();
@@ -1245,7 +1252,7 @@ toggleSelectSegment(i) {
     } else if (this.drag.mode === 'marker' && this.drag.button === 0) {
       this.moveMarkerTo(this.drag.id, this.xToTime(x));
     } else {
-      this.setCursor(this.xToTime(x));
+      this.setCursor(this.xToTime(x), false, !!(this.drag && this.drag.shiftFree));
       if (this.onScrub) this.onScrub(this.cursor);
     }
     this.drag.lastX = x;
@@ -1272,9 +1279,12 @@ toggleSelectSegment(i) {
     const pendingMid = this.drag && this.drag.pendingMiddleMarker;
     const midX = this.drag ? this.drag.x : null;
     const moved = this.drag ? this.drag.moved : false;
+    const pendingSelect = !moved && this.drag && this.drag.pendingSelect != null ? this.drag.pendingSelect : null;
+    const pendingAnchor = this.drag ? this.drag.pendingAnchor : null;
     this.endResizeDrag();
     this.drag = null;
     this.canvas.style.cursor = 'default';
+    if (pendingSelect != null) this.extendSelectRange(pendingSelect, pendingAnchor);
     if (pendingMid) {
       if (!moved && midX != null) this.toggleMarkerAtX(midX);
     } else if (wasMarker && markerId != null) {
@@ -1345,6 +1355,21 @@ toggleSelectSegment(i) {
     this.ctrlHeld = v;
     this.needsRender = true;
     this.tick();
+  }
+
+  setShiftHeld(v) {
+    v = !!v;
+    if (this.shiftHeld === v) return;
+    this.shiftHeld = v;
+    if (!this.drag || this.drag.mode !== 'scrub') return;
+    const freeNow = !!v;
+    if (freeNow !== !!this.drag.shiftFree) {
+      this.drag.shiftFree = freeNow;
+      if (freeNow && this.hoverX != null) {
+        this.setCursor(this.xToTime(this.hoverX), false, true);
+        if (this.onScrub) this.onScrub(this.cursor);
+      }
+    }
   }
 
   
@@ -2203,9 +2228,11 @@ const app = {
     this.setVideoEnabled(false);
     this.setStatus('Ready');
 
-    window.keycut.getOpenFile().then((p) => {
-      if (p) this.handleDroppedFile(p);
-      else setTimeout(() => this.fitInitialWindow(), 0);
+    window.keycut.getOpenFile().then(async (p) => {
+      if (p) {
+        try { await this.fitInitialWindow(); } catch {}
+        await this.handleDroppedFile(p);
+      } else setTimeout(() => this.fitInitialWindow(), 0);
     }).catch(() => setTimeout(() => this.fitInitialWindow(), 0));
     window.keycut.onOpenFile((p) => this.handleDroppedFile(p));
   },
@@ -3353,6 +3380,7 @@ guardTarget(t) {
         return;
       }
       this.timeline.setCtrlHeld(e.ctrlKey || e.metaKey);
+      this.timeline.setShiftHeld(e.shiftKey);
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.code === 'KeyO') { e.preventDefault(); this.openFiles(); return; }
       if (mod && !e.shiftKey && e.code === 'KeyS') { e.preventDefault(); this.saveProject(); return; }
@@ -3452,11 +3480,12 @@ guardTarget(t) {
     });
     window.addEventListener('keyup', (e) => {
       this.timeline.setCtrlHeld(e.ctrlKey || e.metaKey);
+      this.timeline.setShiftHeld(e.shiftKey);
       if (e.code === 'KeyS' || e.code === 'KeyF' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
         this.releaseFrameNav();
       }
     });
-    window.addEventListener('blur', () => { this.timeline.setCtrlHeld(false); app.clearDragCursors(); });
+    window.addEventListener('blur', () => { this.timeline.setCtrlHeld(false); this.timeline.setShiftHeld(false); app.clearDragCursors(); });
   },
 
   setStatus(text, spin = false) {

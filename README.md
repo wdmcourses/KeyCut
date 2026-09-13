@@ -36,13 +36,13 @@ output keeps the original quality and the whole operation is fast.</p>
 | Space | Play / pause |
 | S / F | Previous / next keyframe |
 | Shift+S / Shift+F | Previous / next block |
-| Home / End | Start / end of project |
+| Shift + Drag | Scrub without snapping |
 | M | Add marker at the caret |
 | C | Cut at the caret |
 | X / R | Delete / restore segment |
 | E | Merge segments |
-| Alt + Click | Multi-select segments |
-| Ctrl + Hover | Resize segment edges |
+| Ctrl + Click | Multi-select segments |
+| Ctrl + Drag | Resize segment edges |
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo / Redo |
 | Ctrl+O / Ctrl+S | Open / save project |
 | Ctrl+Shift+S / Ctrl+Shift+F | Previous / next marker (or start / end) |

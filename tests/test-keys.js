@@ -40,11 +40,11 @@ app.whenReady().then(async () => {
     return ev.defaultPrevented;
   })()`);
 
-  const clickAt = (t, y, shift = false, alt = false) => js(`(() => {
+  const clickAt = (t, y, shift = false, ctrl = false) => js(`(() => {
     const c = document.querySelector('#timeline');
     const r = c.getBoundingClientRect();
     const x = (${t} - window.__app.timeline.viewStart) * window.__app.timeline.pxPerSec;
-    c.dispatchEvent(new MouseEvent('mousedown', { clientX: r.left + x, clientY: r.top + ${y}, bubbles: true, cancelable: true, shiftKey: ${shift}, altKey: ${alt} }));
+    c.dispatchEvent(new MouseEvent('mousedown', { clientX: r.left + x, clientY: r.top + ${y}, bubbles: true, cancelable: true, shiftKey: ${shift}, ctrlKey: ${ctrl} }));
     window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     return null;
   })()`);
@@ -208,7 +208,7 @@ app.whenReady().then(async () => {
   await clickAt((k2 + k3) / 2, 48, false, true);
   await clickAt(k1 / 2, 48, false, true);
   const sel1 = await js(`window.__app.timeline.selectionIndices().sort((a, b) => a - b)`);
-  check('alt+click multi-selects [0,2]', sel1[0] === 0 && sel1[1] === 2);
+  check('ctrl+click multi-selects [0,2]', sel1[0] === 0 && sel1[1] === 2);
   await sendKey('KeyE', 'e');
   const afterU = await js(`({cuts: window.__app.model.cuts, del: window.__app.model.deleted})`);
   check('U merges [0,2] -> cuts [0,k3,10]', afterU.cuts.length === 3 && near(afterU.cuts[1], k3));
@@ -509,13 +509,13 @@ app.whenReady().then(async () => {
   await js(`window.__app.cancelSkipMute();`);
 
   
-  console.log('[26] Alt+click multi-select');
+  console.log('[26] Ctrl+click multi-select');
   await js(`window.__app.model.reset(${DUR}); window.__app.model.snapshot(); window.__app.refreshActiveKeys(); window.__app.timeline.selectedIndex = null;`);
   await js(`window.__app.timeline.selectedIndex = null; window.__app.seekTo(${k1}); window.__app.cut(); window.__app.seekTo(${k2}); window.__app.cut(); window.__app.seekTo(${k3}); window.__app.cut();`);
   await clickAt((k1 + k2) / 2, 48); 
   await clickAt((k2 + k3) / 2, 48, false, true); 
-  const altSel = JSON.parse(await js(`JSON.stringify([...window.__app.timeline.selectionIndices()].sort((a, b) => a - b))`));
-  check('alt+click gathers both segments', altSel.length === 2 && altSel[0] === 1 && altSel[1] === 2);
+  const ctrlSel = JSON.parse(await js(`JSON.stringify([...window.__app.timeline.selectionIndices()].sort((a, b) => a - b))`));
+  check('ctrl+click gathers both segments', ctrlSel.length === 2 && ctrlSel[0] === 1 && ctrlSel[1] === 2);
   await sendKey('KeyX', 'x');
   const delMulti = JSON.parse(await js(`JSON.stringify(window.__app.model.deleted)`));
   check('X dims all multi-selected', delMulti[1] === true && delMulti[2] === true && delMulti[0] === false);
