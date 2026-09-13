@@ -30,7 +30,6 @@ app.whenReady().then(async () => {
   makeVideo('v1080.mp4', 1920, 1080);
   registerIpc(() => win, ROOT, TMP);
   ipcMain.handle('get-open-file', () => null);
-  ipcMain.handle('source:lock', () => true);
   const win = new BrowserWindow({
     width: 1600, height: 1000, show: false,
     webPreferences: { preload: path.join(ROOT, 'preload.js'), contextIsolation: true }

@@ -1,7 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
 const { registerIpc } = require('./lib/ipc');
 
 const APP_ROOT = path.join(__dirname);
@@ -22,21 +21,6 @@ try {
 let mainWindow = null;
 let pendingOpenFile = null;
 let forceClose = false;
-let lockProc = null;
-
-function lockSource(filePath) {
-  if (lockProc) {
-    try { lockProc.kill(); } catch {}
-    lockProc = null;
-  }
-  if (!filePath || process.platform !== 'win32') return;
-  const p = filePath.replace(/'/g, "''");
-  const script = "$share = [IO.FileShare]::Read; $share = $share -bor [IO.FileShare]::Write; try { $fs = New-Object IO.FileStream('" + p + "', [IO.FileMode]::Open, [IO.FileAccess]::Read, $share); while ($true) { Start-Sleep -Seconds 3600 } } catch {}";
-  lockProc = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], { stdio: 'ignore', windowsHide: true });
-  lockProc.on('error', () => { lockProc = null; });
-}
-
-
 
 function findFileArg(argv) {
   for (const a of argv.slice(1)) {
@@ -112,10 +96,46 @@ app.whenReady().then(() => {
     pendingOpenFile = null;
     return f;
   });
-  ipcMain.handle('source:lock', (_e, filePath) => {
-    lockSource(filePath);
+  ipcMain.handle('file:renameLocked', async (_e, { oldPath, newPath }) => {
+    if (!oldPath || !newPath) return { ok: false, error: 'Missing path' };
+    const doRename = async () => {
+      if (!fs.existsSync(oldPath)) return { ok: false, error: 'Source file not found' };
+      if (fs.existsSync(newPath)) return { ok: false, error: 'Target file already exists' };
+      await fs.promises.rename(oldPath, newPath);
+      return { ok: true };
+    };
+    let result;
+    let lastErr = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        result = await doRename();
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < 4) await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+      }
+    }
+    if (!result || !result.ok) {
+      const msg = result && result.error ? result.error : (lastErr ? lastErr.message : 'Rename failed');
+      return { ok: false, error: msg };
+    }
+    return { ok: true, path: newPath };
+  });
+  ipcMain.on('win:set-title', (_e, title) => {
+    if (mainWindow) mainWindow.setTitle(String(title || ''));
+  });
+  ipcMain.handle('file:delete', async (_e, filePath) => {
+    if (!filePath) return { ok: false, error: 'Missing path' };
+    try {
+      if (!fs.existsSync(filePath)) return { ok: true, missing: true };
+      await fs.promises.unlink(filePath);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   });
   registerIpc(() => mainWindow, APP_ROOT, TMP_DIR);
+  cleanupTmp();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -126,16 +146,20 @@ function cleanupTmp() {
   try {
     if (!fs.existsSync(TMP_DIR)) return;
     for (const f of fs.readdirSync(TMP_DIR)) {
-      fs.rmSync(path.join(TMP_DIR, f), { recursive: true, force: true });
+      const p = path.join(TMP_DIR, f);
+      for (let i = 0; i < 4; i++) {
+        try {
+          fs.rmSync(p, { recursive: true, force: true });
+          break;
+        } catch {
+          if (i < 3) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150 * (i + 1));
+        }
+      }
     }
   } catch {}
 }
 
 app.on('will-quit', () => {
-  if (lockProc) {
-    try { lockProc.kill(); } catch {}
-    lockProc = null;
-  }
   cleanupTmp();
 });
 

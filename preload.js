@@ -9,16 +9,34 @@ contextBridge.exposeInMainWorld('keycut', {
     return () => ipcRenderer.removeListener('app:open-file', listener);
   },
   saveProjectDialog: (defaultName) => ipcRenderer.invoke('dialog:saveProject', defaultName),
+  openProjectDialog: () => ipcRenderer.invoke('dialog:openProject'),
+  recentsList: () => ipcRenderer.invoke('recents:list'),
+  recentsAdd: (filePath) => ipcRenderer.invoke('recents:add', filePath),
+  recentsClear: () => ipcRenderer.invoke('recents:clear'),
+
+  compatStart: (opts) => ipcRenderer.invoke('compat:start', opts),
+  compatChunk: () => ipcRenderer.invoke('compat:chunk'),
+  compatStderr: () => ipcRenderer.invoke('compat:stderr'),
+  compatStop: () => ipcRenderer.invoke('compat:stop'),
+  compatDeleteDummy: (dummyPath) => ipcRenderer.invoke('compat:deleteDummy', dummyPath),
+  compatEnsureDummy: (opts) => ipcRenderer.invoke('compat:ensureDummy', opts),
+  onCompatDummyProgress: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('compat:dummy-progress', listener);
+    return () => ipcRenderer.removeListener('compat:dummy-progress', listener);
+  },
   saveExportDialog: (defaultName, compress) => ipcRenderer.invoke('dialog:saveExport', defaultName, compress),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
   getFilePath: (file) => webUtils.getPathForFile(file),
 
   probeVideo: (filePath) => ipcRenderer.invoke('probe:video', filePath),
   probeQuick: (p) => ipcRenderer.invoke('probe:quick', p),
+  probeJoinable: (files) => ipcRenderer.invoke('probe:joinable', { files }),
   renderWaveform: (filePath, opts) => ipcRenderer.invoke('waveform:render', { filePath, ...opts }),
   ffmpegPath: () => ipcRenderer.invoke('ffmpegPath'),
-  lockSource: (filePath) => ipcRenderer.invoke('source:lock', filePath),
   fileExists: (p) => ipcRenderer.invoke('file:exists', p),
+  renameFileLocked: (payload) => ipcRenderer.invoke('file:renameLocked', payload),
+  deleteFile: (p) => ipcRenderer.invoke('file:delete', p),
   chooseFile: () => ipcRenderer.invoke('dialog:chooseFile'),
   chooseFiles: () => ipcRenderer.invoke('dialog:chooseFiles'),
   concatJoin: (payload) => ipcRenderer.invoke('concat:join', payload),
@@ -31,6 +49,7 @@ contextBridge.exposeInMainWorld('keycut', {
     return () => ipcRenderer.removeListener('concat:progress', listener);
   },
   workArea: () => ipcRenderer.invoke('screen:workArea'),
+  setTitle: (title) => ipcRenderer.send('win:set-title', title),
   setWindowSize: (width, height) => ipcRenderer.invoke('win:setSize', { width, height }),
   setWindowContentSize: (width, height, frameW, frameH) => ipcRenderer.invoke('win:setContentSize', { width, height, frameW, frameH }),
   setWindowBounds: (bounds) => ipcRenderer.invoke('win:setBounds', bounds),
@@ -38,9 +57,11 @@ contextBridge.exposeInMainWorld('keycut', {
 
   saveProject: (filePath, data) => ipcRenderer.invoke('project:save', { filePath, data }),
   loadProject: (filePath) => ipcRenderer.invoke('project:load', filePath),
+  loadProjectTimeline: (filePath, id) => ipcRenderer.invoke('project:loadTimeline', { filePath, id }),
   resolveProjectSource: (projectPath, rel) => ipcRenderer.invoke('project:resolveSource', { projectPath, rel }),
 
   exportStart: (payload) => ipcRenderer.invoke('export:start', payload),
+  exportProject: (payload) => ipcRenderer.invoke('export:project', payload),
   exportCancel: () => ipcRenderer.invoke('export:cancel'),
   onExportProgress: (cb) => {
     const listener = (_e, data) => cb(data);

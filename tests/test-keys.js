@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const fs = require('fs');
@@ -167,11 +167,16 @@ app.whenReady().then(async () => {
   check('no scrub blip in gray area', blipGray < 0);
   const hasDrop = await js(`typeof window.keycut.getFilePath === 'function'`);
   check('drop APIs exposed', hasDrop);
+  const tlCount = await js(`window.__app.state.timelines.length`);
   await js(`window.__app.state.source = null;`);
   await js(`window.__app.handleDroppedFile('${SRC.replace(/\\/g, '\\\\')}')`);
   await new Promise((r) => setTimeout(r, 1200));
   const droppedLoaded = await js(`!!window.__app.state.source`);
-  check('dropped file loads', droppedLoaded);
+  check('in-project drop does not replace the source', !droppedLoaded);
+  const tlCountAfter = await js(`window.__app.state.timelines.length`);
+  check('no duplicate timeline added', tlCountAfter === tlCount);
+  await js(`window.__app.loadSource('${SRC.replace(/\\/g, '\\\\')}')`);
+  await new Promise((r) => setTimeout(r, 1200));
 
   
   console.log('[11] playback guard');

@@ -10,7 +10,11 @@
     "pack": "node scripts/pack.js",
     "test": "electron tests/test-renderer.js",
     "test:keys": "electron tests/test-keys.js",
-    "test:scroll": "electron tests/test-scroll.js"
+    "test:scroll": "electron tests/test-scroll.js",
+    "test:missing": "electron tests/test-missing.js",
+    "test:history": "electron tests/test-history.js",
+    "test:panel": "electron tests/test-panel.js",
+    "test:export": "electron tests/test-export-folder.js"
   },
   "author": "KeyCut",
   "license": "MIT",
