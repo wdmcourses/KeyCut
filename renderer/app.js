@@ -992,9 +992,18 @@ class Timeline {
     return null;
   }
 
+  effectiveSnapKeys() {
+    const keys = this.keyTimes || [];
+    const act = this.activeKeys;
+    const model = this.model;
+    const hasEdits = model && model.deleted && model.deleted.some((d) => d);
+    if (!hasEdits) return keys.length ? keys : (act || keys);
+    return act && act.length ? act : keys;
+  }
+
   setCursor(t, fromVideo = false, noSnap = false) {
     const end = this.duration || 0;
-    if (!noSnap) t = endSnap(t, end, this.activeKeys || this.keyTimes, app && app.state ? app.state.fps : 0);
+    if (!noSnap) t = endSnap(t, end, this.effectiveSnapKeys(), app && app.state ? app.state.fps : 0);
     t = Math.min(Math.max(0, t), end);
     this.cursor = t;
     if (!fromVideo) app.seek(t);
@@ -1231,7 +1240,7 @@ toggleSelectSegment(i) {
       }
       if (region === 'seg') {
         const block = this.model.segmentOf(rawT);
-        snapT = prevKey(rawT, this.activeKeys || this.keyTimes);
+        snapT = prevKey(rawT, this.effectiveSnapKeys());
         if (e.ctrlKey || e.metaKey) this.toggleSelectSegment(block);
         else if (e.shiftKey) this.drag.pendingSelect = this.drag.pendingSelect != null ? this.drag.pendingSelect : block;
         else this.clearSelection();
@@ -3000,6 +3009,7 @@ const app = {
     } else {
       this.model.reset(duration);
     }
+    this.refreshActiveKeys();
     this.timeline.setData({ duration, keyTimes: [], model: this.model, cursor: cur });
     if (Number.isFinite(tl.zoom) && tl.zoom > 0) {
       this.timeline.pxPerSec = Math.max(this.timeline.minZoom(), Math.min(this.timeline.maxZoom(), tl.zoom));
@@ -3484,11 +3494,6 @@ guardTarget(t) {
         this.zoomToOneMinute();
         return;
       }
-      if (e.code === 'F5') {
-        e.preventDefault();
-        this.reanalyzeActiveTimeline();
-        return;
-      }
       if (e.code === 'KeyS' || e.code === 'ArrowLeft') {
         e.preventDefault();
         if (e.shiftKey) { this.navPause(() => this.prevBlock()); return; }
@@ -3881,9 +3886,10 @@ guardTarget(t) {
       while (ki < keys.length && keys[ki] <= b + 1e-9) { set.add(keys[ki]); ki++; }
     }
     const arr = Array.from(set).sort((x, y) => x - y);
-    this.state.activeKeys = arr;
+    const act = arr.length ? arr : null;
+    this.state.activeKeys = act;
     if (this.timeline) {
-      this.timeline.activeKeys = arr;
+      this.timeline.activeKeys = act;
       this.timeline.activeBlock = null;
     }
   },
@@ -4894,22 +4900,6 @@ releaseFrameNav() {
     this.syncZoomSlider();
   },
 
-  async reanalyzeActiveTimeline() {
-    if (this._convertState === 'analyzing' || this._convertState === 'converting') { this.setStatus('Busy: conversion in progress'); return; }
-    if (this.state.exporting) { this.setStatus('Busy: export in progress'); return; }
-    const tl = (this.state.timelines || []).find((t) => t.id === this.state.activeTimelineId);
-    if (!tl || !tl.src) { this.setStatus('No active timeline to reanalyze'); return; }
-    this.snapshotActiveTimeline();
-    this.showTaskModal({ title: 'Reanalyze file', message: 'Analyzing ' + tl.src.split(/[\\/]/).pop() + '…', indeterminate: true });
-    try {
-      await this.applyTimeline(tl, { fit: false, forceProbe: true });
-      if (this.state.projectPath) await this.saveProject();
-      this.setStatus('Timeline reanalyzed: ' + tl.src.split(/[\\/]/).pop());
-    } finally {
-      this.hideTaskModal();
-    }
-  },
-
   async saveProject() {
     if (this._convertState === 'analyzing' || this._convertState === 'converting') return;
     if (!this.state.source && !(this.state.timelines || []).length) { this.setStatus('Nothing to save'); return; }
@@ -4925,6 +4915,12 @@ releaseFrameNav() {
 
   async saveProjectTo(filePath) {
     if (!filePath) return;
+    let slowTimer = null;
+    let progressShown = false;
+    slowTimer = setTimeout(() => {
+      if (!this.taskModalOpen()) { this.showTaskModal({ title: 'Saving Project', message: 'Saving…', indeterminate: true }); progressShown = true; }
+    }, 400);
+    try {
     this.snapshotActiveTimeline();
     if (this.state.projectPath) {
       const need = (this.state.timelines || []).filter((tl) => tl.cuts == null);
@@ -5005,6 +5001,10 @@ releaseFrameNav() {
       this.state.dirty = true;
       this.$labelUpdate();
       this.setStatus('Save failed: ' + (res && res.error));
+    }
+    } finally {
+      if (slowTimer) clearTimeout(slowTimer);
+      if (progressShown) this.hideTaskModal();
     }
   },
 
@@ -5292,20 +5292,24 @@ releaseFrameNav() {
     const es = this.state.exportSettings;
     if (this.compat) this.compat.stop();
     const compressOpts = es.compress ? { compress: true, resolution: es.resolution } : null;
-    if (this._exportMode === 'segment') {
-      const id = this._segmentMarkerId;
-      this._exportMode = 'timeline';
-      this._segmentMarkerId = null;
-      await this.exportMarkerPart(id, compressOpts);
-      return;
+    try {
+      if (this._exportMode === 'segment') {
+        const id = this._segmentMarkerId;
+        this._exportMode = 'timeline';
+        this._segmentMarkerId = null;
+        await this.exportMarkerPart(id, compressOpts);
+        return;
+      }
+      if (this._exportMode === 'project') {
+        await this.exportProjectFolder(compressOpts);
+        return;
+      }
+      const blocks = es.blocks;
+      if (blocks) await this.exportParts(compressOpts);
+      else await this.exportSingle(compressOpts);
+    } finally {
+      if (this.compat) this.compat.resume();
     }
-    if (this._exportMode === 'project') {
-      await this.exportProjectFolder(compressOpts);
-      return;
-    }
-    const blocks = es.blocks;
-    if (blocks) await this.exportParts(compressOpts);
-    else await this.exportSingle(compressOpts);
   },
 
   async exportProjectFolder(compressOpts) {
@@ -5482,8 +5486,20 @@ releaseFrameNav() {
       total += parts[parts.length - 1].duration;
     }
     if (!parts.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
-    const defaultName = (timelines[0].name || 'timeline').replace(/\.[^.]+$/, '') + (compressOpts ? '.mp4' : '.mkv');
-    const outputPath = await window.keycut.saveExportDialog(defaultName, compressOpts ? true : false);
+    const firstSrc = timelines[0] && timelines[0].src;
+    let allowed = compressOpts ? null : null;
+    if (!compressOpts && firstSrc) {
+      try {
+        const meta = await window.keycut.probeVideo(firstSrc);
+        allowed = (meta && !meta.error) ? this.compatibleExportExts(meta.streams || null) : null;
+      } catch {
+        allowed = null;
+      }
+    }
+    const srcExt = (firstSrc || '').match(/\.([^.\\/]+)$/)?.[1] || 'mkv';
+    const defaultExt = compressOpts ? 'mp4' : srcExt;
+    const defaultName = (timelines[0].name || 'timeline').replace(/\.[^.]+$/, '') + '.' + defaultExt;
+    const outputPath = compressOpts ? await window.keycut.saveExportDialog(defaultName, true) : await this.pickLosslessOutput(defaultName, allowed, srcExt);
     if (!outputPath) return;
     this.closeExportSettings();
     await this.runProjectJoinExport(parts, outputPath, compressOpts, total);
@@ -5601,7 +5617,7 @@ releaseFrameNav() {
     if (!runs.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
     const srcName = this.state.source.split(/[\\/]/).pop();
     const base = compressOpts ? srcName.replace(/\.[^.]+$/, '') + '.mp4' : srcName;
-    const outPath = await window.keycut.saveExportDialog(base, compressOpts ? true : false);
+    const outPath = compressOpts ? await window.keycut.saveExportDialog(base, true) : await this.pickLosslessOutput(base);
     if (!outPath) return;
     if (this.isSourcePath(outPath)) {
       this.setStatus('Export cancelled: output file cannot overwrite the source "' + this.state.source.split(/[\\/]/).pop() + '"');
@@ -5623,6 +5639,73 @@ releaseFrameNav() {
     return ext;
   },
 
+  compatibleExportExts(streamsOverride) {
+    const streams = streamsOverride || this.state.streams;
+    const v = (streams || []).find((s) => s.codec_type === 'video');
+    const a = (streams || []).find((s) => s.codec_type === 'audio');
+    const vcodec = v && v.codec_name ? String(v.codec_name).toLowerCase() : '';
+    const acodec = a && a.codec_name ? String(a.codec_name).toLowerCase() : '';
+    if (!vcodec && !acodec) return null;
+    const V = {
+      h264: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts', '3gp', 'f4v', 'avi'],
+      avc1: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts', '3gp', 'f4v', 'avi'],
+      hevc: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts'],
+      h265: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts'],
+      vp9: ['mp4', 'mkv', 'webm'],
+      av1: ['mp4', 'mkv', 'webm'],
+      vp8: ['mkv', 'webm'],
+      theora: ['mkv'],
+      mpeg4: ['mp4', 'mov', 'mkv', 'avi', '3gp'],
+      mpeg2video: ['mkv', 'ts', 'mts', 'm2ts', 'avi'],
+      mjpeg: ['mp4', 'mov', 'mkv', 'avi'],
+      wmv2: ['mkv', 'wmv'],
+      msmpeg4: ['mkv', 'avi'],
+      msmpeg4v2: ['mkv', 'avi'],
+      msmpeg4v3: ['mkv', 'avi']
+    };
+    const A = {
+      aac: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts', '3gp', 'f4v', 'flv'],
+      mp3: ['mp4', 'mov', 'mkv', 'ts', 'mts', 'm2ts', 'avi'],
+      opus: ['mkv', 'webm', 'ts'],
+      vorbis: ['mkv', 'webm'],
+      ac3: ['mkv', 'ts', 'mts', 'm2ts', 'mov'],
+      pcm: ['mov', 'mkv', 'avi'],
+      pcm_s16le: ['mov', 'mkv', 'avi'],
+      pcm_s16be: ['mov', 'mkv', 'avi'],
+      pcm_s24le: ['mov', 'mkv', 'avi'],
+      pcm_bluray: ['mov', 'mkv'],
+      pcm_dvd: ['mov', 'mkv'],
+      mp2: ['mkv', 'ts', 'mts', 'm2ts'],
+      flac: ['mkv', 'mov'],
+      wmav2: ['mkv', 'wmv']
+    };
+    let allowed = V[vcodec] || null;
+    if (acodec && A[acodec] && allowed) allowed = allowed.filter((e) => A[acodec].includes(e));
+    return allowed;
+  },
+
+  orderSourceFirst(allowed, srcExtOverride) {
+    if (!allowed || !allowed.length) return allowed;
+    const srcExt = String(srcExtOverride || this.sourceExt()).replace('.', '').toLowerCase();
+    if (!allowed.includes(srcExt)) return allowed;
+    return [srcExt, ...allowed.filter((e) => e !== srcExt)];
+  },
+
+  async pickLosslessOutput(defaultName, allowedOverride, srcExtOverride) {
+    const allowed = allowedOverride !== undefined ? allowedOverride : this.compatibleExportExts();
+    const ordered = this.orderSourceFirst(allowed, srcExtOverride);
+    const outPath = await window.keycut.saveExportDialog(defaultName, false, ordered);
+    if (!outPath) return null;
+    if (allowed && allowed.length) {
+      const ext = (outPath.match(/\.[^.\\/]+$/) || [''])[0].replace('.', '').toLowerCase();
+      if (!allowed.includes(ext)) {
+        this.setStatus('Output format .' + ext + ' is not supported for this video codec. Choose another format.');
+        return null;
+      }
+    }
+    return outPath;
+  },
+
   async exportMarkerPart(id, compressOpts) {
     if (this.state.exporting) return;
     const m = this.timeline.markers.find((x) => x.id === id);
@@ -5636,7 +5719,7 @@ releaseFrameNav() {
     const segs = clipRuns(this.model.keptRuns(), prev, m.t);
     if (!segs.length) { this.setStatus('This part contains no kept content'); return; }
     const base = safeFileName(m.name || 'part') + (compressOpts ? '.mp4' : this.sourceExt());
-    const outPath = await window.keycut.saveExportDialog(base, compressOpts ? true : false);
+    const outPath = compressOpts ? await window.keycut.saveExportDialog(base, true) : await this.pickLosslessOutput(base);
     if (!outPath) return;
     if (this.isSourcePath(outPath)) {
       this.setStatus('Export cancelled: output file cannot overwrite the source "' + this.state.source.split(/[\\/]/).pop() + '"');
@@ -5937,7 +6020,12 @@ releaseFrameNav() {
         row.className = 'concat-item';
         row.draggable = !this._concatBusy;
         row.dataset.index = i;
-        row.innerHTML = '<span class="concat-idx">' + (i + 1) + '</span><span class="concat-name" title="' + f.path.replace(/"/g, '&quot;') + '"></span><button class="btn btn--xs btn--danger concat-del" title="Remove">✕</button>';
+        const cname = String(f.name || f.path || '');
+        const di = cname.lastIndexOf('.');
+        const ext = di > 0 ? cname.slice(di + 1) : '';
+        row.innerHTML = '<span class="concat-idx">' + (i + 1) + '</span><span class="concat-name" title="' + f.path.replace(/"/g, '&quot;') + '"></span>' +
+          (ext ? '<span class="fl-badge" title="' + ext + '">' + ext + '</span>' : '') +
+          '<button class="btn btn--xs btn--danger concat-del" title="Remove">✕</button>';
         row.querySelector('.concat-name').textContent = f.name;
         row.querySelector('.concat-del').addEventListener('click', (e) => { e.stopPropagation(); this.concatRemoveFile(i); });
         row.addEventListener('dragstart', (e) => { if (this._concatBusy) { e.preventDefault(); return; } this._concatDragIndex = i; this._concatDragDir = null; this._concatDragLastY = e.clientY; row.classList.add('dragging'); });
@@ -6059,8 +6147,11 @@ releaseFrameNav() {
   async concatSaveAs() {
     if (!this._concatResult) return;
     const defaultName = this._concatResult.split(/[\\/]/).pop();
-    const outPath = await window.keycut.saveExportDialog(defaultName, false);
+    const allowed = [(this._concatResult.match(/\.([^.\\/]+)$/) || ['', 'mkv'])[1]];
+    const outPath = await window.keycut.saveExportDialog(defaultName, false, allowed);
     if (!outPath) return;
+    const pickedExt = (outPath.match(/\.[^.\\/]+$/) || [''])[0].replace('.', '').toLowerCase();
+    if (!allowed.includes(pickedExt)) { this.setStatus('Output must keep the joined container format (.' + allowed[0] + ').'); return; }
     const ok = await window.keycut.concatCopyOutput({ from: this._concatResult, to: outPath });
     if (!ok || !ok.ok) { this.setStatus('Save failed'); return; }
     await window.keycut.concatRemoveOutput({ out: this._concatResult });

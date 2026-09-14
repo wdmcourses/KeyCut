@@ -45,10 +45,30 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) errors.push('console: ' + message);
   });
-  await win.loadFile(path.join(ROOT, 'renderer', 'index.html'));
-  await new Promise((r) => setTimeout(r, 800));
+  try {
+    await win.loadFile(path.join(ROOT, 'renderer', 'index.html'));
+    await new Promise((r) => setTimeout(r, 800));
+    await run(win);
+  } catch (err) {
+    console.log('FATAL:', err && err.message);
+  } finally {
+    win.destroy();
+    console.log('\nRESULT:', pass, 'passed,', fail, 'failed');
+    console.log('CONSOLE ERRORS:', errors.length ? errors.join('\n') : '(none)');
+    app.exit(fail || errors.length ? 1 : 0);
+  }
+});
 
-  const js = (code) => win.webContents.executeJavaScript(code);
+async function run(win) {
+
+  const js = (code) => {
+    let timer = null;
+    const p = win.webContents.executeJavaScript(code);
+    return Promise.race([
+      p,
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('JS TIMEOUT: ' + code.slice(0, 60))), 20000); })
+    ]).finally(() => { if (timer) clearTimeout(timer); });
+  };
   const src = SRC.replace(/\\/g, '\\\\');
 
   console.log('[1] load source');
@@ -77,7 +97,7 @@ app.whenReady().then(async () => {
   check('compat-mode badge shown', r2.modeShown);
 
   console.log('[3] playback advances while playing');
-  await js(`window.__app.play();`);
+  await js(`window.__app.togglePlay();`);
   await new Promise((r) => setTimeout(r, 2500));
   const t1 = await js(`window.__app.state.cursor`);
   await new Promise((r) => setTimeout(r, 1500));
@@ -86,6 +106,7 @@ app.whenReady().then(async () => {
   await js(`window.__app.pause();`);
 
   console.log('[4] pause hides overlay when master shows real file');
+  await new Promise((r) => setTimeout(r, 150));
   const r4 = await js(`(() => {
     const cp = window.__app.compat;
     return {
@@ -101,7 +122,6 @@ app.whenReady().then(async () => {
     const cp = window.__app.compat;
     const p = await window.keycut.compatEnsureDummy({ src: '${src}', duration: 12 });
     if (!p || !p.ok || !p.dummyPath) return { ok: false };
-    const st = require ? null : null;
     return { ok: true, path: p.dummyPath };
   })()`);
   check('dummy ensure ok', r5.ok);
@@ -117,9 +137,4 @@ app.whenReady().then(async () => {
     return { active: cp.active, hasSlave: !!cp.slave, modeShown: !document.getElementById('compat-mode').classList.contains('hidden') };
   })()`);
   check('compat stopped', !r6.active && !r6.hasSlave && !r6.modeShown);
-
-  win.destroy();
-  console.log('\nRESULT:', pass, 'passed,', fail, 'failed');
-  console.log('CONSOLE ERRORS:', errors.length ? errors.join('\n') : '(none)');
-  app.exit(fail || errors.length ? 1 : 0);
-});
+}

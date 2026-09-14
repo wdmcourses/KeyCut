@@ -4,6 +4,7 @@ const BUFFER_AHEAD = 10;
 const BUFFER_MAX = 60;
 const STALL_MS = 2500;
 const RESTART_DEBOUNCE_MS = 500;
+const FAIL_COOLDOWN_MS = 10000;
 
 function normPath(p) {
   return String(p || '').replace(/\\/g, '/');
@@ -44,6 +45,8 @@ class CompatPlayer {
     this._dummyResolve = null;
     this._fallbackPending = false;
     this._dummyPreparing = false;
+    this._realSrc = null;
+    this._failAt = 0;
   }
 
   attach() {
@@ -113,6 +116,7 @@ class CompatPlayer {
   async _switchMasterToDummy(dummyPath) {
     if (!this.master || !dummyPath) return false;
     this.masterIsDummy = true;
+    this._realSrc = this.src;
     this._muteMaster();
     const cur = this.app.state.cursor || 0;
     const ready = new Promise((resolve) => {
@@ -162,6 +166,16 @@ class CompatPlayer {
     this.slave = null;
     this.canvas = null;
     this.spinner = null;
+  }
+
+  _restoreMasterToReal() {
+    const m = this.master;
+    if (!m || !this.masterIsDummy || !this._realSrc) return;
+    this.masterIsDummy = false;
+    if (this.app.scrubAudio && this.app.scrubAudio.src) {
+      this.app.scrubAudio.pause();
+    }
+    try { m.src = toFileUrl(this._realSrc); m.load(); } catch {}
   }
 
   showSpinner(on) {
@@ -232,6 +246,7 @@ class CompatPlayer {
   async startStream(seekTo) {
     if (!this.master || !this.slave || !this.src) return;
     this.active = true;
+    this._failAt = 0;
     if (!this._syncTimer) this._syncTimer = setInterval(() => this._sync(), 30);
     this._teardownStream();
     const mime = this._mimeCodec();
@@ -291,6 +306,7 @@ class CompatPlayer {
   }
 
   _stopStreaming(reason) {
+    this._failAt = Date.now();
     this._teardownStream();
     if (this.slave) this.slave.removeAttribute('src');
     this._unfreeze();
@@ -469,7 +485,10 @@ class CompatPlayer {
       this._watchLast = m.currentTime;
       return;
     }
-    if (this.hasCompat(src)) return;
+    if (this.hasCompat(src)) {
+      if (!this._masterCanShowReal()) this.activateFor(src);
+      return;
+    }
     if (m.paused || m.ended || m.seeking) { this._frozenAt = 0; this._watchLast = m.currentTime; return; }
     if (m.error) { this.activateFor(src); return; }
     if (m.currentTime === this._watchLast) {
@@ -500,7 +519,8 @@ class CompatPlayer {
   }
 
   activateFor(src) {
-    if (!src || this.active || this.hasCompat(src)) return;
+    if (!src || this.active) return;
+    if (this._failAt && Date.now() - this._failAt < FAIL_COOLDOWN_MS) return;
     this.flagSource(src);
     if (this.app && this.app.onCompatTrigger) this.app.onCompatTrigger(src);
     this.afterSource(src, this.app.state.duration);
@@ -515,6 +535,15 @@ class CompatPlayer {
     }
     this._pendingResume = true;
     this.activateFor(src);
+  }
+
+  resume() {
+    const src = this.app.state.source;
+    if (!src || this.active || this.stopping) return;
+    if (!this.hasCompat(src)) return;
+    this._failAt = 0;
+    this._pendingResume = false;
+    this.afterSource(src, this.app.state.duration);
   }
 
   async _recover(src) {
@@ -534,6 +563,7 @@ class CompatPlayer {
     this._teardownStream();
     if (this.slave) this.slave.removeAttribute('src');
     this._removeOverlay();
+    this._restoreMasterToReal();
     window.keycut.compatStop();
     if (this._weMuted && this.master) {
       this.master.muted = this.prevMuted;
@@ -542,7 +572,7 @@ class CompatPlayer {
     this.active = false;
     this.stopping = false;
     this.src = null;
-    this.masterIsDummy = true;
+    this.masterIsDummy = false;
     this._fallbackPending = false;
     this._dummyPreparing = false;
     this._pendingResume = false;

@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('keycut', {
     ipcRenderer.on('compat:dummy-progress', listener);
     return () => ipcRenderer.removeListener('compat:dummy-progress', listener);
   },
-  saveExportDialog: (defaultName, compress) => ipcRenderer.invoke('dialog:saveExport', defaultName, compress),
+  saveExportDialog: (defaultName, compress, allowedExts) => ipcRenderer.invoke('dialog:saveExport', defaultName, compress, allowedExts),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
   getFilePath: (file) => webUtils.getPathForFile(file),
 
