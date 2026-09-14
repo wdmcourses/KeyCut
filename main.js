@@ -75,20 +75,6 @@ ipcMain.on('app:force-close', () => {
 
 
 
-const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) {
-  app.quit();
-} else {
-  app.on('second-instance', (_e, argv) => {
-    const file = findFileArg(argv);
-    if (file && mainWindow) mainWindow.webContents.send('app:open-file', file);
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
-}
-
 app.whenReady().then(() => {
   pendingOpenFile = findFileArg(process.argv);
   ipcMain.handle('get-open-file', () => {

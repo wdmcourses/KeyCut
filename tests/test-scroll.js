@@ -9,6 +9,7 @@ let pass = 0, fail = 0;
 const check = (name, cond) => { if (cond) { pass++; console.log('  PASS', name); } else { fail++; console.log('  FAIL', name); } };
 
 app.whenReady().then(async () => {
+  const watchdog = setTimeout(() => { console.log('\nTEST TIMEOUT after 60s'); app.exit(1); }, 60000);
   let win;
   registerIpc(() => win, ROOT, path.join(DIR, 'rt_tmp'));
   win = new BrowserWindow({ width: 1280, height: 800, show: false, webPreferences: { preload: path.join(ROOT, 'preload.js'), contextIsolation: true } });
@@ -146,7 +147,26 @@ app.whenReady().then(async () => {
   check('right ear drag outward extends viewEnd', earDrag.vEndAfter > earDrag.vEndBefore);
   check('right ear drag outward zooms out (pxPerSec down)', earDrag.pps < earDrag.ppsBefore);
 
+  console.log('[6] scrollbar track click positions the view');
+  const track = await js(`(() => {
+    const T = window.__app.timeline;
+    const bar = document.querySelector('#timeline-scrollbar');
+    const br = bar.getBoundingClientRect();
+    const barW = bar.clientWidth;
+    T.duration = 600;
+    T.pxPerSec = T.w / 100;
+    T.viewStart = 0; T.clampView(); T.updateScrollbar();
+    const vsBefore = T.viewStart;
+    const bodyR = T.thumbVisual(barW).right;
+    const clickX = br.left + Math.min(br.width - 10, bodyR + 40);
+    bar.dispatchEvent(new MouseEvent('mousedown', { clientX: clickX, clientY: br.top + 10, bubbles: true, cancelable: true, button: 0 }));
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    return { vsBefore, vsAfter: T.viewStart };
+  })()`);
+  check('track click moves viewStart (positions view)', track.vsAfter > track.vsBefore, JSON.stringify(track));
+
   win.destroy();
+  clearTimeout(watchdog);
   console.log('\nRESULT:', pass, 'passed,', fail, 'failed');
   app.exit(fail ? 1 : 0);
 });

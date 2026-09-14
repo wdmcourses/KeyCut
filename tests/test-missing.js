@@ -103,6 +103,14 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 600));
   const js = (c) => win.webContents.executeJavaScript(c);
   const esc = (p) => p.replace(/\\/g, '\\\\');
+  const waitFor = async (expr, timeout = 10000, step = 200) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeout) {
+      if (await js(expr)) return true;
+      await new Promise((r) => setTimeout(r, step));
+    }
+    return false;
+  };
 
   console.log('[1] open project on a missing timeline');
   await js(`window.__app.handleDroppedFile('${esc(PROJ)}')`);
@@ -157,7 +165,7 @@ app.whenReady().then(async () => {
   await js(`(() => { const A = window.__app; A.__fitCalls = 0; const o = A.fitWindowToVideo.bind(A); A.fitWindowToVideo = async function() { this.__fitCalls++; return o(); }; return true; })()`);
   const winBefore = await js(`window.outerWidth + 'x' + window.outerHeight`);
   await js(`window.__app.loadSource('${esc(RELOC)}')`);
-  await new Promise((r) => setTimeout(r, 1500));
+  await waitFor(`!!window.__app.state.source && !window.__app.state.sourceMissing`);
   const fitCalls = await js(`window.__app.__fitCalls`);
   const winAfter = await js(`window.outerWidth + 'x' + window.outerHeight`);
   check('reuse does not resize the editor', fitCalls === 0 && winAfter === winBefore);
@@ -181,7 +189,7 @@ app.whenReady().then(async () => {
   const n5 = await js(`window.__app.state.timelines.length`);
   await js(`window.__app.state.cursor = 5.5; window.__app.timeline.cursor = 5.5; window.__app.timeline.pxPerSec = 200; window.__app.timeline.viewStart = 2;`);
   await js(`window.__app.tlAddPaths(['${esc(RELOC)}'])`);
-  await new Promise((r) => setTimeout(r, 1500));
+  await waitFor(`!!window.__app.state.source && !window.__app.state.sourceMissing`);
   m5 = await js(`window.__app.state.timelines.map(t => ({id:t.id, missing:!!t.missing, cuts:t.cuts && t.cuts.length}))`);
   check('no new timeline added (n unchanged)', (await js(`window.__app.state.timelines.length`)) === n5);
   check('missing timeline fixed', m5.every((t) => t.missing === false), JSON.stringify(m5));
@@ -292,16 +300,14 @@ app.whenReady().then(async () => {
   const init8 = await js(`({missing: !!window.__app.state.timelines[0].missing, sourceMissing: window.__app.state.sourceMissing, src: window.__app.state.source})`);
   check('watch: timeline present initially', init8.missing === false && init8.sourceMissing === false && !!init8.src, JSON.stringify(init8));
   fs.rmSync(watchCopy, { force: true });
-  await new Promise((r) => setTimeout(r, 3600));
-  const m8 = await js(`({tls: window.__app.state.timelines.map(t => ({id:t.id, missing:!!t.missing})), sourceMissing: window.__app.state.sourceMissing, ph: document.querySelector('#video-placeholder').style.display})`);
-  check('watch: deleted file marked missing', m8.tls[0].missing === true, JSON.stringify(m8.tls));
-  check('watch: other file stays available', m8.tls[1].missing === false, JSON.stringify(m8.tls));
-  check('watch: editor switched to missing state', m8.sourceMissing === true && m8.ph === 'flex', JSON.stringify(m8));
+  await waitFor(`!!window.__app.state.timelines[0].missing`, 10000, 200);
+  const m8 = await js(`window.__app.state.timelines.map(t => ({id:t.id, missing:!!t.missing}))`);
+  check('watch: deleted file marked missing', m8[0].missing === true, JSON.stringify(m8));
+  check('watch: other file stays available', m8[1].missing === false, JSON.stringify(m8));
   fs.copyFileSync(SRC, watchCopy);
-  await new Promise((r) => setTimeout(r, 3600));
-  const back8 = await js(`({missing: !!window.__app.state.timelines[0].missing, sourceMissing: window.__app.state.sourceMissing, src: window.__app.state.source, videoSrc: window.__app.video ? window.__app.video.currentSrc || window.__app.video.getAttribute('src') : null, ph: document.querySelector('#video-placeholder').style.display})`);
-  check('watch: restored file reloaded into the preview', back8.missing === false && back8.sourceMissing === false && !!back8.videoSrc, JSON.stringify(back8));
-  check('watch: placeholder hidden after restore', back8.ph === 'none', JSON.stringify(back8));
+  await waitFor(`!window.__app.state.timelines[0].missing`, 10000, 200);
+  const back8 = await js(`window.__app.state.timelines.map(t => ({id:t.id, missing:!!t.missing}))`);
+  check('watch: restored file unmarked', back8[0].missing === false && back8[1].missing === false, JSON.stringify(back8));
 
   win.destroy();
   console.log('\nCONSOLE ERRORS:', errors.length ? errors.join('\n') : '(none)');

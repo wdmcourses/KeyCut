@@ -14,6 +14,7 @@
     "test:missing": "electron tests/test-missing.js",
     "test:history": "electron tests/test-history.js",
     "test:panel": "electron tests/test-panel.js",
+    "test:runs": "electron tests/test-runs.js",
     "test:export": "electron tests/test-export-folder.js"
   },
   "author": "KeyCut",

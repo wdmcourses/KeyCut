@@ -13,10 +13,8 @@ const PROJ = path.join(DIR, 'proj.kc');
 const TMP = path.join(DIR, 'rt_tmp');
 
 function makeFixture() {
+  fs.rmSync(DIR, { recursive: true, force: true });
   fs.mkdirSync(DIR, { recursive: true });
-  for (const f of fs.readdirSync(DIR)) {
-    if (f !== 'test.mp4' && f !== 'test2.mp4' && f.endsWith('.mp4')) fs.rmSync(path.join(DIR, f), { force: true });
-  }
   const ff = process.env.KEYCUT_FFMPEG || 'D:/Work/GitHub/KeyCut/vendor/ffmpeg/win32/ffmpeg.exe';
   for (const [p, freq] of [[SRC, 440], [SRC2, 660], [SRC3, 880]]) {
     if (!fs.existsSync(p)) {
@@ -61,6 +59,11 @@ const check = (name, cond, d) => {
 };
 
 app.whenReady().then(async () => {
+  const startedAt = Date.now();
+  const watchdog = setTimeout(() => {
+    console.log('\nTEST TIMEOUT after 90s — aborting (possible hang)');
+    app.exit(1);
+  }, 90000);
   makeFixture();
   const errors = [];
   let win;
@@ -84,6 +87,14 @@ app.whenReady().then(async () => {
   const esc = (p) => p.replace(/\\/g, '\\\\');
   const panelHidden = () => js(`document.querySelector('#timelines-panel').classList.contains('hidden')`);
   const activeId = () => js(`window.__app.state.activeTimelineId`);
+  const waitFor = async (expr, timeout = 8000, step = 100) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeout) {
+      if (await js(expr)) return true;
+      await new Promise((r) => setTimeout(r, step));
+    }
+    return false;
+  };
   const clickRow = (i) => js(`(() => { const rows = document.querySelectorAll('#tl-list .fl-item'); const r = rows[${i}]; if (!r) return 'no-row:' + rows.length; const n = r.querySelector('.fl-name'); if (!n) return 'no-name'; n.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); return 'ok'; })()`);
   const clickRename = (i) => js(`(() => { const rows = document.querySelectorAll('#tl-list .fl-item'); const r = rows[${i}]; if (!r) return 'no-row'; r.querySelector('.fl-rename').click(); return 'ok'; })()`);
   const clickInput = () => js(`(() => { const el = document.querySelector('.fl-rename-input'); if (el) el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); return !!el; })()`);
@@ -244,16 +255,16 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 150));
   check('panel closed on first canvas press', (await panelHidden()) === true);
 
-  console.log('[8] hotkey T toggles the panel');
+  console.log('[8] hotkey W toggles the panel');
   await js(`window.__app.toggleTimelinesPanel(false)`);
-  check('panel closed before T', (await panelHidden()) === true);
-  await js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', key: 't', bubbles: true, cancelable: true }));`);
+  check('panel closed before W', (await panelHidden()) === true);
+  await js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', bubbles: true, cancelable: true }));`);
   await new Promise((r) => setTimeout(r, 150));
-  check('panel opened by T', (await panelHidden()) === false);
+  check('panel opened by W', (await panelHidden()) === false);
   check('timelines button shows pressed state when open', (await js(`document.querySelector('#btn-timelines').classList.contains('active')`)) === true);
-  await js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', key: 't', bubbles: true, cancelable: true }));`);
+  await js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', bubbles: true, cancelable: true }));`);
   await new Promise((r) => setTimeout(r, 150));
-  check('panel closed by T again', (await panelHidden()) === true);
+  check('panel closed by W again', (await panelHidden()) === true);
   check('timelines button pressed state cleared when closed', (await js(`document.querySelector('#btn-timelines').classList.contains('active')`)) === false);
 
   console.log('[9] concat Insert does not resize the editor with a project open');
@@ -280,8 +291,9 @@ app.whenReady().then(async () => {
   const active = await js(`({cuts: window.__app.model.cuts.length, mk: window.__app.timeline.markers.length, pps: window.__app.timeline.pxPerSec})`);
   check('active timeline has distinct markup (3 cuts, 1 marker)', active.cuts === 3 && active.mk === 1, JSON.stringify(active));
   const nBefore2 = await js(`window.__app.state.timelines.length`);
+  fs.copyFileSync(SRC, SRC2);
   await js(`(() => { const A = window.__app; A._concatResult = '${esc(SRC2)}'; return A.concatInsert(); })()`);
-  await new Promise((r) => setTimeout(r, 1500));
+  await waitFor(`window.__app.state.activeTimelineId === ${nBefore2 + 1} && window.__app.timeline.duration > 0`, 25000, 200);
   const ins = await js(`({id: window.__app.state.activeTimelineId, n: window.__app.state.timelines.length})`);
   check('new timeline added', ins.n === nBefore2 + 1);
   check('joined timeline becomes active', ins.id === nBefore2 + 1, String(ins.id));
@@ -308,8 +320,8 @@ app.whenReady().then(async () => {
   check('concatAddPaths blocked during export', concatFiles === 0);
   await js(`window.__app.state.exporting = false;`);
   await js(`window.__app.tlAddPaths(['${esc(SRC3)}'])`);
-  await new Promise((r) => setTimeout(r, 300));
-  check('tlAddPaths works after export ends', (await js(`window.__app.state.timelines.length`)) === nBusy + 1);
+  const tlAdded = await waitFor(`window.__app.state.timelines.length === ${nBusy + 1}`);
+  check('tlAddPaths works after export ends', tlAdded);
 
   console.log('[13] openFiles warns when a project file is mixed into the selection');
   ipcMain.removeHandler('dialog:chooseFiles');
@@ -367,6 +379,7 @@ app.whenReady().then(async () => {
   const ordB1 = await js(`Array.from(document.querySelectorAll('#tl-list .fl-item .fl-name')).map(n => n.textContent)`);
   check('name-area drag moved the row to the end', ordB1[ordB1.length - 1] === firstB && ordB1[0] !== firstB, JSON.stringify(ordB1));
   await js(`(() => { window.__app.__openCalls = []; const o = window.__app.openTimelineById.bind(window.__app); window.__app.openTimelineById = async function(id) { window.__app.__openCalls.push(id); return o(id); }; return true; })()`);
+  await js(`window.__app._fileList._suppressClickUntil = 0;`);
   const clickAct = await js(`(() => {
     const rows = document.querySelectorAll('#tl-list .fl-item');
     const name = rows[0].querySelector('.fl-name');
@@ -398,6 +411,7 @@ app.whenReady().then(async () => {
   check('Enter resolved the confirm dialog with ok=true', (await js(`window.__app.__r16`)) === true, String(await js(`window.__app.__r16`)));
 
   console.log('[16] export project: combine toggle reflects join compatibility');
+  await js(`window.__app.state.dirty = false;`);
   await js(`window.__app.handleDroppedFile('${esc(PROJ)}')`);
   await new Promise((r) => setTimeout(r, 1200));
   await js(`window.__app.exportProject()`);
@@ -418,6 +432,7 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('#export-settings-cancel').click()`);
 
   win.destroy();
+  clearTimeout(watchdog);
   console.log('\nCONSOLE ERRORS:', errors.length ? errors.join('\n') : '(none)');
   console.log('\nRESULT:', pass, 'passed,', fail, 'failed');
   app.exit(fail || errors.length ? 1 : 0);

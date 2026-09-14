@@ -166,6 +166,62 @@ app.whenReady().then(async () => {
   check('marker name not emptied', r8.kept === true && !!r8.name);
   check('warning text mentions empty', /empty/i.test(r8.warnText));
 
+  console.log('[9] Escape cancels marker rename, Enter commits');
+  await js(`window.__app.timeline.addMarkerAt(1.5);`);
+  const r9a = await js(`(() => {
+    const t = window.__app.timeline;
+    const m = t.markers[t.markers.length - 1];
+    const orig = m.name;
+    window.__app.markerBubble(m);
+    const inp = document.getElementById('marker-name');
+    inp.value = 'renamed_escape';
+    inp.dispatchEvent(new Event('input'));
+    const afterInput = m.name;
+    inp.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true, cancelable: true }));
+    return { orig, afterInput, afterEsc: m.name };
+  })()`);
+  check('typing writes a valid new name', r9a.afterInput === 'renamed_escape', JSON.stringify(r9a));
+  check('Escape reverts to the original name', r9a.afterEsc === r9a.orig && r9a.afterEsc !== 'renamed_escape', JSON.stringify(r9a));
+
+  await js(`window.__app.timeline.addMarkerAt(1.7);`);
+  const r9b = await js(`(() => {
+    const t = window.__app.timeline;
+    const m = t.markers[t.markers.length - 1];
+    const orig = m.name;
+    window.__app.markerBubble(m);
+    const inp = document.getElementById('marker-name');
+    inp.value = 'renamed_enter';
+    inp.dispatchEvent(new Event('input'));
+    inp.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', key: 'Enter', bubbles: true, cancelable: true }));
+    return { orig, afterEnter: m.name };
+  })()`);
+  check('Enter commits the new name', r9b.afterEnter === 'renamed_enter' && r9b.afterEnter !== r9b.orig, JSON.stringify(r9b));
+
+  console.log('[10] export segment shows the time range');
+  await js(`window.__app.timeline.addMarkerAt(2); window.__app.timeline.addMarkerAt(4);`);
+  const r10 = await js(`(() => {
+    const t = window.__app.timeline;
+    const sorted = t.sortedMarkers();
+    const last = sorted[sorted.length - 1];
+    let prev = 0;
+    for (const mm of sorted) { if (mm.id === last.id) break; prev = mm.t; }
+    window.__app.openSegmentExport(last.id);
+    const rangeEl = document.getElementById('export-segment-range');
+    const parse = (s) => { const [mm, ss] = s.split(':'); return (+mm) * 60 + (+ss); };
+    return {
+      visible: !rangeEl.classList.contains('hidden'),
+      from: document.getElementById('export-segment-from').textContent,
+      to: document.getElementById('export-segment-to').textContent,
+      prev, mT: last.t,
+      fromT: parse(document.getElementById('export-segment-from').textContent),
+      toT: parse(document.getElementById('export-segment-to').textContent)
+    };
+  })()`);
+  await js(`document.getElementById('export-settings-modal').classList.add('hidden');`);
+  check('segment range shown in export settings', r10.visible === true, JSON.stringify(r10));
+  check('range from matches previous marker time', Math.abs(r10.fromT - r10.prev) < 0.01, JSON.stringify(r10));
+  check('range to matches the marker time', Math.abs(r10.toT - r10.mT) < 0.01, JSON.stringify(r10));
+
   win.destroy();
   console.log('\nCONSOLE ERRORS:', errors.length ? errors.join('\n') : '(none)');
   console.log('\nRESULT:', pass, 'passed,', fail, 'failed');

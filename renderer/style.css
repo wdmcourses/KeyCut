@@ -225,10 +225,17 @@ body {
   border-color: var(--danger-armed-border);
   color: var(--text-on-solid);
 }
-.btn--success.on {
-  background: var(--danger-solid);
+.btn--danger.on {
+  background: var(--danger-solid-border);
   border-color: var(--danger-solid-border);
   color: var(--text-on-solid);
+}
+#marker-off {
+  --b-bg: transparent;
+  --b-hover-bg: var(--danger-bg);
+  --b-border: var(--danger-border);
+  --b-hover-border: var(--danger);
+  --b-fg: var(--danger-text);
 }
 
 .icon-btn {
@@ -1129,7 +1136,29 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
 #export-modal-card { width: 320px; }
 #export-modal-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-#export-settings-card { width: 360px; }
+#export-settings-card { width: 350px; }
+.export-segment-range {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.esr-label { font-size: 12px; color: var(--text-dim, var(--text)); }
+.esr-time {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-on-solid);
+  background: var(--panel-3);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-xs, 4px);
+  padding: 2px 8px;
+}
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .switch { position: relative; flex: 0 0 auto; width: 36px; height: 20px; }
 .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
