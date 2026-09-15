@@ -36,18 +36,23 @@ output keeps the original quality and the whole operation is fast.</p>
 | Space | Play / pause |
 | S / F | Previous / next keyframe |
 | Shift+S / Shift+F | Previous / next block |
+| Ctrl+Shift+S / Ctrl+Shift+F | Previous marker / Start · Next marker / End |
+| Ctrl+F · Enter / Shift+Enter | Find marker · Next / Prev |
 | Shift + Drag | Scrub without snapping |
-| M | Add marker at the caret |
-| C | Cut at the caret |
-| X / R | Delete / restore segment |
+| 0 / 1 | Fit entire timeline |
+| 2 | 20 seconds around caret |
+| C | Cut at caret |
+| X / Delete | Delete segment |
+| R | Restore segment |
 | E | Merge segments |
 | Ctrl + Click | Multi-select segments |
 | Ctrl + Drag | Resize segment edges |
+| M | Add marker at caret |
+| Middle click | Add / remove marker |
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo / Redo |
 | Ctrl+O / Ctrl+S | Open / save project |
-| Ctrl+Shift+S / Ctrl+Shift+F | Previous / next marker (or start / end) |
-| Ctrl+F · Enter / Shift+Enter | Find marker · next / prev |
 | Ctrl+E | Export |
+| Ctrl+W | Close project |
 
 ## Getting started
 

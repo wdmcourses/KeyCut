@@ -42,7 +42,7 @@ window.FileList = class FileList {
       list.appendChild(empty);
       this.emptyEl = empty;
       return;
-    } 
+    }
     const listLeave = (e) => {
       if (e.relatedTarget && list.contains(e.relatedTarget)) return;
       this.clearDropHints();
