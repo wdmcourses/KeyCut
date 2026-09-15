@@ -126,7 +126,7 @@ app.whenReady().then(async () => {
   await js(`window.__app.state.projectPath = '${SUBPROJ.replace(/\\/g, '\\\\')}'; window.__app.saveProject();`);
   await new Promise((r) => setTimeout(r, 600));
   const kcText = fs.readFileSync(SUBPROJ, 'utf8');
-  const hasRel = /<src\s+rel="\.\.\/test\.mp4">/.test(kcText);
+  const hasRel = /<src\s+rel="\.\.\/test\.mp4" abs="[^"]*">/.test(kcText);
   check('project stores relative src (../test.mp4)', hasRel);
   const loadedSub = await js(`window.keycut.loadProject('${SUBPROJ.replace(/\\/g, '\\\\')}')`);
   check('loadProject srcRel = ../test.mp4', loadedSub.timelines[0].srcRel === '../test.mp4');

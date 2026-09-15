@@ -17,11 +17,11 @@
             <button id="tl-panel-close" class="btn btn--sm tl-panel-close" title="Close Project (Ctrl+W)" disabled>Close Project</button>
           </div>
         </div>
-        <button id="tl-add" class="btn btn--sm btn--accent">Add Files</button>
+        <button id="tl-add" class="btn btn--sm btn--accent" title="Add Files (Ctrl+O)">Add Files</button>
         <div id="tl-list" class="tl-list"></div>
         <div class="tl-panel-footer">
-          <button id="tl-panel-dismiss" class="btn btn--sm" title="Close panel (W)">Close</button>
-          <button id="tl-export-project" class="btn btn--sm btn--primary tl-export-project" title="Export the whole project">Export Project</button>
+          <button id="tl-panel-dismiss" class="btn btn--sm" title="Close Panel (W)">Close</button>
+          <button id="tl-export-project" class="btn btn--sm btn--primary tl-export-project" title="Export the whole Project (Ctrl+Shift+E)">Export Project</button>
         </div>
       </div>
       <div id="video-wrap">
@@ -37,7 +37,7 @@
           <div id="recent-projects" class="recent-projects hidden">
             <div class="recent-projects-header">
               <span class="recent-projects-title">Recent Projects</span>
-              <button id="recent-projects-clear" class="recent-projects-clear" title="Clear recent projects">Clear</button>
+              <button id="recent-projects-clear" class="recent-projects-clear" title="Clear recent Projects">Clear</button>
             </div>
             <div id="recent-projects-list" class="recent-projects-list"></div>
           </div>
@@ -53,7 +53,7 @@
         </div>
         <div class="spacer"></div>
         <div class="transport">
-          <button id="btn-start" class="icon-btn icon-btn--round icon-btn--lg" title="To start of project ([)">
+          <button id="btn-start" class="icon-btn icon-btn--round icon-btn--lg" title="To start of Project ([)">
             <svg viewBox="0 0 24 24" width="17" height="17"><line x1="4" y1="6" x2="4" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18 6 L12 12 L18 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 6 L7 12 L13 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <button id="btn-prevblock" class="icon-btn icon-btn--round icon-btn--lg" title="Previous block (Shift+S)">
@@ -71,15 +71,15 @@
           <button id="btn-nextblock" class="icon-btn icon-btn--round icon-btn--lg" title="Next block (Shift+F)">
             <svg viewBox="0 0 24 24" width="17" height="17"><path d="M8 6 L14 12 L8 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 6 L19 12 L13 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-end" class="icon-btn icon-btn--round icon-btn--lg" title="To end of project (])">
+          <button id="btn-end" class="icon-btn icon-btn--round icon-btn--lg" title="To end of Project (])">
             <svg viewBox="0 0 24 24" width="17" height="17"><line x1="20" y1="6" x2="20" y2="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M6 6 L12 12 L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 6 L17 12 L11 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
         <div class="action-buttons">
-          <button id="btn-save" class="btn btn--sm" title="Save project (Ctrl+S)">Save</button>
-          <button id="btn-concat" class="btn btn--sm btn--accent" title="Join (J)">Join</button>
-          <button id="btn-set-keys" class="btn btn--sm btn--accent hidden" title="Re-encode with frequent keyframes">Set keys</button>
-          <button id="btn-export" class="btn btn--sm btn--primary" title="Export timeline (Ctrl+E) · Project (Ctrl+Shift+E)">Export</button>
+          <button id="btn-save" class="btn btn--sm" title="Save Project (Ctrl+S)">Save</button>
+          <button id="btn-concat" class="btn btn--sm btn--accent" title="Join Files (J)">Join</button>
+          <button id="btn-set-keys" class="btn btn--sm btn--accent hidden" title="Re-encode with frequent Keyframes (K)">Set Keys</button>
+          <button id="btn-export" class="btn btn--sm btn--primary" title="Export Timeline (Ctrl+E) · Project (Ctrl+Shift+E)">Export</button>
         </div>
       </div>
     </section>
@@ -91,9 +91,9 @@
           <input id="marker-name" class="field" type="text" spellcheck="false" maxlength="80" />
           <div id="marker-warn" class="warn hidden">Name already used by another marker</div>
           <div class="btn-group btn-group--fill">
-            <button id="marker-delete" class="btn btn--xs btn--block btn--danger" type="button" title="Delete marker">Del</button>
+            <button id="marker-delete" class="btn btn--xs btn--block btn--danger" type="button" title="Delete Marker">Del</button>
             <button id="marker-off" class="btn btn--xs btn--block btn--danger" type="button" title="Disable this part for export">Off</button>
-            <button id="marker-export" class="btn btn--xs btn--block btn--success" type="button" title="Export this part to a file">Export</button>
+            <button id="marker-export" class="btn btn--xs btn--block btn--success" type="button" title="Export this part to a File">Export</button>
             <button id="marker-ok" class="btn btn--xs btn--block btn--primary" type="button">Ok</button>
           </div>
           <div id="marker-bubble-arrow"></div>
@@ -107,9 +107,9 @@
         </div>
         <div id="zoom-row">
           <div id="zoom-controls">
-            <button id="btn-zoom-out" class="mini-btn" title="Zoom out (-)">&minus;</button>
+            <button id="btn-zoom-out" class="mini-btn" title="Zoom Out (-)">&minus;</button>
             <input id="zoom-range" type="range" min="0" max="100" value="50" />
-            <button id="btn-zoom-in" class="mini-btn" title="Zoom in (+)">+</button>
+            <button id="btn-zoom-in" class="mini-btn" title="Zoom In (+)">+</button>
           </div>
           <div id="fit-group" class="hidden">
             <span id="fit-label">Editor size:</span>
@@ -132,7 +132,7 @@
       <span class="hint"><kbd>X</kbd> Del · <kbd>R</kbd> Restore</span>
       <span class="hint"><kbd>E</kbd> Merge · <kbd>M</kbd> Marker</span>
       <span class="hint"><kbd>S</kbd><kbd>F</kbd> Frame</span>
-      <button id="btn-help" class="icon-btn icon-btn--round icon-btn--xs" title="Keyboard shortcuts (F1)">
+      <button id="btn-help" class="icon-btn icon-btn--round icon-btn--xs" title="Keyboard Shortcuts (F1)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </button>
     </div>
@@ -146,7 +146,7 @@
       </div>
       <div id="export-modal-bar" class="progress-track"><div id="export-modal-fill" class="progress-fill"></div></div>
       <div class="btn-group btn-group--end">
-        <button id="export-cancel" class="btn btn--sm btn--danger" style="display:none">Cancel</button>
+        <button id="export-cancel" class="btn btn--sm btn--danger" style="display:none" title="Cancel Export">Cancel</button>
       </div>
     </div>
   </div>
@@ -189,15 +189,15 @@
         </div>
       </div>
       <div class="btn-group btn-group--end">
-        <button id="export-settings-cancel" class="btn btn--sm btn--danger">Cancel</button>
-        <button id="export-settings-action" class="btn btn--sm btn--primary">Export</button>
+        <button id="export-settings-cancel" class="btn btn--sm btn--danger" title="Cancel (Esc)">Cancel</button>
+        <button id="export-settings-action" class="btn btn--sm btn--primary" title="Export (Enter)">Export</button>
       </div>
     </div>
   </div>
 
   <div id="task-modal" class="modal hidden">
     <div id="task-modal-card" class="modal-card">
-      <div id="task-modal-title" class="modal-title">Open file</div>
+      <div id="task-modal-title" class="modal-title">Open File</div>
       <div id="task-modal-msgbox" class="msgbox">
         <div id="task-modal-message" class="modal-text"></div>
       </div>
@@ -208,7 +208,7 @@
   <div id="convert-modal" class="modal hidden">
     <div id="convert-modal-card" class="modal-card">
 
-      <div id="convert-modal-title" class="modal-title">Set keys</div>
+      <div id="convert-modal-title" class="modal-title">Set Keys</div>
       <div id="convert-modal-sub" class="modal-sub">Re-encodes the video with frequent keyframes for more precise editing.</div>
       <div id="convert-modal-detail" class="detail-group">
         <span class="detail-label">Detail:</span>
@@ -243,9 +243,9 @@
           <div class="shortcut-group-title">Navigation</div>
           <div class="shortcut-row"><span class="desc">Previous / Next keyframe</span><span class="keys"><kbd>S</kbd> / <kbd>F</kbd></span></div>
           <div class="shortcut-row"><span class="desc">Previous / Next block</span><span class="keys"><kbd>Shift</kbd>+<kbd>S</kbd> / <kbd>Shift</kbd>+<kbd>F</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Previous marker / start</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">Next marker / end</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span></div>
-          <div class="shortcut-row shortcut-row--find"><span class="desc">Find marker · next / prev</span><span class="keys"><span class="kcombo"><kbd>Ctrl</kbd>+<kbd>F</kbd> · <kbd>Enter</kbd></span><span class="kcombo"><kbd>Shift</kbd>+<kbd>Enter</kbd></span></span></div>
+          <div class="shortcut-row"><span class="desc">Previous marker / Start</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">Next marker / End</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span></div>
+          <div class="shortcut-row shortcut-row--find"><span class="desc">Find marker · Next / Prev</span><span class="keys"><span class="kcombo"><kbd>Ctrl</kbd>+<kbd>F</kbd> · <kbd>Enter</kbd></span><span class="kcombo"><kbd>Shift</kbd>+<kbd>Enter</kbd></span></span></div>
           <div class="shortcut-row"><span class="desc">Scrub without snapping</span><span class="keys"><kbd>Shift</kbd> + Drag</span></div>
           <div class="shortcut-row"><span class="desc">Fit entire timeline</span><span class="keys"><kbd>0</kbd> / <kbd>1</kbd></span></div>
           <div class="shortcut-row"><span class="desc">20 seconds around caret</span><span class="keys"><kbd>2</kbd></span></div>
@@ -260,38 +260,38 @@
             <div class="shortcut-row"><span class="desc">Multi-select segments</span><span class="keys"><kbd>Ctrl</kbd> + Click</span></div>
             <div class="shortcut-row"><span class="desc">Resize segment edges</span><span class="keys"><kbd>Ctrl</kbd> + Drag</span></div>
             <div class="shortcut-row"><span class="desc">Add marker at caret</span><span class="keys"><kbd>M</kbd></span></div>
-            <div class="shortcut-row"><span class="desc">Add / remove marker</span><span class="keys">Middle click</span></div>
+            <div class="shortcut-row"><span class="desc">Add / Remove marker</span><span class="keys">Middle click</span></div>
           </div>
           <div class="shortcut-group g-tools">
-            <div class="shortcut-row"><span class="desc">Close project</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>W</kbd></span></div>
+            <div class="shortcut-row"><span class="desc">Close Project</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>W</kbd></span></div>
           </div>
         </div>
       </div>
-      <button id="help-modal-close" class="btn">Close</button>
+      <button id="help-modal-close" class="btn" title="Close (Esc)">Close</button>
     </div>
   </div>
 
   <div id="find-bar" class="hidden">
     <input id="find-input" class="field" type="text" placeholder="Find marker…" spellcheck="false" />
-    <button id="find-prev" class="btn btn--ghost btn--sm" type="button" disabled>&#8592;</button>
-    <button id="find-next" class="btn btn--ghost btn--sm" type="button" disabled>&#8594;</button>
+    <button id="find-prev" class="btn btn--ghost btn--sm" type="button" disabled title="Previous (Shift+F3)">&#8592;</button>
+    <button id="find-next" class="btn btn--ghost btn--sm" type="button" disabled title="Next (F3)">&#8594;</button>
     <span id="find-count" class="find-count"></span>
   </div>
 
   <div id="confirm-modal" class="modal hidden">
     <div id="confirm-card" class="modal-card">
-      <div id="confirm-title" class="modal-title">Overwrite files?</div>
+      <div id="confirm-title" class="modal-title">Overwrite Files?</div>
       <div id="confirm-message" class="modal-text"></div>
       <label id="confirm-check-row" class="switch-row switch-box confirm-check-row hidden">
-        <span id="confirm-check-label" class="switch-label">Also delete the file</span>
+        <span id="confirm-check-label" class="switch-label">Also delete the File</span>
         <span class="switch">
           <input type="checkbox" id="confirm-check" />
           <span class="switch-track"><span class="switch-knob"></span></span>
         </span>
       </label>
       <div class="btn-group btn-group--end">
-        <button id="confirm-cancel" class="btn btn--sm btn--danger">Cancel</button>
-        <button id="confirm-ok" class="btn btn--sm btn--primary">Overwrite</button>
+        <button id="confirm-cancel" class="btn btn--sm btn--danger" title="Cancel (Esc)">Cancel</button>
+        <button id="confirm-ok" class="btn btn--sm btn--primary" title="Confirm (Enter)">Overwrite</button>
       </div>
     </div>
   </div>
@@ -299,9 +299,9 @@
   <div id="concat-modal" class="modal hidden">
     <div id="concat-card" class="modal-card modal-card--wide">
       <div class="concat-header">
-        <div id="concat-title" class="modal-title">Join files</div>
+        <div id="concat-title" class="modal-title">Join Files</div>
         <div class="btn-group">
-          <button id="concat-close" class="btn btn--sm">Close</button>
+          <button id="concat-close" class="btn btn--sm" title="Close (Esc)">Close</button>
         </div>
       </div>
       <div id="concat-files-box" class="concat-files hidden">
@@ -319,11 +319,11 @@
           <button id="concat-cancel" class="btn btn--sm btn--danger hidden" title="Cancel">Cancel</button>
         </div>
         <div class="btn-group">
-          <button id="concat-clear" class="btn btn--sm hidden" title="Clear list">Clear</button>
-          <button id="concat-open" class="btn btn--sm btn--accent">Open files</button>
-          <button id="concat-saveas" class="btn btn--sm btn--accent hidden">Save as</button>
-          <button id="concat-join" class="btn btn--sm btn--primary hidden">Join files</button>
-          <button id="concat-insert" class="btn btn--sm btn--primary hidden" title="Add the joined file as a new timeline">Add timeline</button>
+          <button id="concat-clear" class="btn btn--sm hidden" title="Clear List">Clear</button>
+          <button id="concat-open" class="btn btn--sm btn--accent" title="Open Files (Enter)">Open Files</button>
+          <button id="concat-saveas" class="btn btn--sm btn--accent hidden" title="Save As (Ctrl+S)">Save As</button>
+          <button id="concat-join" class="btn btn--sm btn--primary hidden" title="Join Files (Enter)">Join Files</button>
+          <button id="concat-insert" class="btn btn--sm btn--primary hidden" title="Add the joined file as a new Timeline (Enter)">Add Timeline</button>
         </div>
       </div>
       <div id="concat-progress" class="concat-progress">

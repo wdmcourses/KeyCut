@@ -1123,7 +1123,7 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
 }
 #find-bar.hidden { display: none; }
 #find-input { width: 220px; }
-#find-prev, #find-next { min-width: 34px; padding: 6px 9px; }
+#find-prev, #find-next { min-width: 34px; padding: 6px 9px; cursor: pointer; }
 .find-count {
   font-size: 11px;
   color: var(--text-dim);

@@ -592,6 +592,7 @@ class Timeline {
     this.playing = false;
 
     this.drag = null; 
+    this.scrollbarDragging = false;
     this.selected = null; 
     this.selectedAnchor = null; 
     this.selectedSet = null; 
@@ -779,6 +780,7 @@ class Timeline {
         return;
       }
       app.beginDragCursor(mode === 'pan' ? 'grabbing' : 'ew-resize');
+      this.scrollbarDragging = true;
       if (mode === 'left') grabOff = x - bodyL;
       else if (mode === 'right') grabOff = bodyR - x;
       const startX = x;
@@ -806,6 +808,7 @@ class Timeline {
 
       const up = () => {
         releaseLock();
+        this.scrollbarDragging = false;
         this.updateScrollbar();
         if (this.thumbEl) this.thumbEl.classList.remove('dragging');
         app.endDragCursor();
@@ -1228,7 +1231,6 @@ toggleSelectSegment(i) {
     this.drag = { mode: pan ? 'pan' : 'scrub', lastX: x, moved: false, x, y, region };
     if (pan) this.canvas.style.cursor = 'grabbing';
     if (!pan) {
-      
       if (app.video && !app.video.paused) app.pause();
       const rawT = this.xToTime(x);
       let snapT = rawT;
@@ -2450,7 +2452,7 @@ const app = {
     if (!filtered.length) return;
     const showProgress = filtered.length > 1;
     if (showProgress) {
-      this.showTaskModal({ title: 'Adding files', message: 'Adding files… 1/' + filtered.length, indeterminate: false, progress: 0 });
+      this.showTaskModal({ title: 'Adding Files', message: 'Adding Files… 1/' + filtered.length, indeterminate: false, progress: 0 });
     }
     let added = false;
     let firstAdded = null;
@@ -2475,6 +2477,7 @@ const app = {
         name: p.split(/[\\/]/).pop(),
         src: p,
         srcRel: null,
+        srcAbs: p,
         srcName: null,
         video: null,
         cursor: 0,
@@ -2523,8 +2526,8 @@ const app = {
 
   async tlRemoveTimeline(tl) {
     if (!tl) return;
-    const opts = { title: 'Delete timeline', okText: 'Delete', cancelText: 'Cancel', okDanger: true, cancelPlain: true };
-    if (!tl.missing) opts.checkbox = 'Also delete the file';
+    const opts = { title: 'Delete Timeline', okText: 'Delete', cancelText: 'Cancel', okDanger: true, cancelPlain: true };
+    if (!tl.missing) opts.checkbox = 'Also delete the File';
     const res = await this.confirmDialog('Delete timeline "' + (tl.name || '') + '"?', opts);
     const ok = res && res.ok !== undefined ? res.ok : res;
     if (!ok) { this.renderTimelines(); return; }
@@ -2606,6 +2609,7 @@ const app = {
       const base = newSrc.split(/[\\/]/).pop();
       tl.src = newSrc;
       tl.srcRel = null;
+      tl.srcAbs = newSrc;
       tl.srcName = base;
       tl.name = base;
     } else {
@@ -2633,6 +2637,14 @@ const app = {
   async checkTimelinesExist() {
     const timelines = this.state.timelines || [];
     for (const tl of timelines) {
+      if (tl.srcRel || tl.srcAbs) {
+        const ok = await this.resolveTimelineSource(tl);
+        if (ok !== !tl.missing) {
+          tl.missing = !ok;
+          this.renderTimelines();
+        }
+        continue;
+      }
       if (!tl.src) {
         if (!tl.missing) { tl.missing = true; this.renderTimelines(); }
         continue;
@@ -2683,6 +2695,7 @@ const app = {
     }
     tl.src = p;
     tl.srcRel = null;
+    tl.srcAbs = p;
     tl.srcName = p.split(/[\\/]/).pop();
     tl.name = p.split(/[\\/]/).pop();
     tl.missing = false;
@@ -2734,6 +2747,7 @@ const app = {
     const v = missing.video || {};
     missing.src = path;
     missing.srcRel = null;
+    missing.srcAbs = path;
     missing.srcName = path.split(/[\\/]/).pop();
     missing.name = missing.srcName;
     missing.missing = false;
@@ -2746,6 +2760,22 @@ const app = {
     };
     this.renderTimelines();
     return missing;
+  },
+
+  async resolveTimelineSource(tl) {
+    if (!tl) return false;
+    if (tl.srcRel) {
+      const rp = await window.keycut.resolveProjectSource(this.state.projectPath || '', tl.srcRel);
+      if (rp && rp.path && await window.keycut.fileExists(rp.path)) {
+        tl.src = rp.path;
+        return true;
+      }
+    }
+    if (tl.srcAbs && await window.keycut.fileExists(tl.srcAbs)) {
+      tl.src = tl.srcAbs;
+      return true;
+    }
+    return false;
   },
 
   async openTimelineById(id) {
@@ -2767,12 +2797,7 @@ const app = {
         this.loadTimelineData(tl, r.timeline);
       }
     }
-    if (tl.srcRel) {
-      const rp = await window.keycut.resolveProjectSource(this.state.projectPath || '', tl.srcRel);
-      if (req !== this._tlOpenReq) return;
-      if (rp && rp.path) tl.src = rp.path;
-    }
-    if (!tl.src) {
+    if (!(await this.resolveTimelineSource(tl)) && !tl.src) {
       this.setStatus('Timeline source file is missing');
       return;
     }
@@ -2807,6 +2832,7 @@ const app = {
     tl.compatNeeded = !!data.compatNeeded;
     if (!tl.src && data.src) tl.src = data.src;
     if (data.srcRel) tl.srcRel = data.srcRel;
+    if (data.srcAbs) tl.srcAbs = data.srcAbs;
     if (data.srcName) tl.srcName = data.srcName;
     tl.loaded = true;
   },
@@ -2853,12 +2879,11 @@ const app = {
     let meta = null;
     const dataReady = !forceProbe && !!(tl.cuts && tl.cuts.length >= 2 && tl.video && tl.video.dur > 0 && !isMp4File(tl.src) && tl.keyTimes && tl.keyTimes.length > 0);
     if (dataReady) {
-      const exists = await window.keycut.fileExists(tl.src);
-      if (stale()) return;
-      if (!exists) {
+      if (!(await this.resolveTimelineSource(tl))) {
         this.applyTimelineMarkupOnly(tl, req);
         return;
       }
+      if (stale()) return;
       const v = tl.video || {};
       meta = {
         source: tl.src,
@@ -2873,7 +2898,7 @@ const app = {
         streams: tl.streams || null
       };
     } else {
-      this.showTaskModal({ title: 'Open file', message: 'Analyzing…', indeterminate: true });
+      this.showTaskModal({ title: 'Open File', message: 'Analyzing…', indeterminate: true });
       try {
         meta = await window.keycut.probeVideo(tl.src);
       } catch (err) {
@@ -2885,12 +2910,11 @@ const app = {
       this.hideTaskModal();
       if (stale()) return;
       if (!meta || meta.error) {
-        const exists = await window.keycut.fileExists(tl.src);
-        if (stale()) return;
-        if (!exists) {
+        if (!(await this.resolveTimelineSource(tl))) {
           this.applyTimelineMarkupOnly(tl, req);
           return;
         }
+        if (stale()) return;
         this.setStatus('Error: ' + (meta && meta.error ? meta.error : 'failed to analyze video'));
         return;
       }
@@ -3211,7 +3235,7 @@ const app = {
       setTimeout(() => this.updateFitButtons(), 150);
     });
     this.video.addEventListener('timeupdate', () => {
-      if (!this.video.paused && !(this.timeline.drag && this.timeline.drag.mode !== 'pan')) this.guardPlayback();
+      if (!this.video.paused && !this.timeline.drag && !this.timeline.scrollbarDragging) this.guardPlayback();
     });
     this.video.addEventListener('play', () => {
       this.timeline.playing = true;
@@ -3244,7 +3268,7 @@ const app = {
   startPlaybackGuard() {
     if (this._pg) return;
     const tick = () => {
-      if (!this.video.paused && !(this.timeline.drag && this.timeline.drag.mode !== 'pan')) this.guardPlayback();
+      if (!this.video.paused && !this.timeline.drag && !this.timeline.scrollbarDragging) this.guardPlayback();
       this._pg = requestAnimationFrame(tick);
     };
     this._pg = requestAnimationFrame(tick);
@@ -3384,6 +3408,10 @@ guardTarget(t) {
         if (e.code === 'Escape') {
           e.preventDefault();
           this.cancelStepPause();
+          const tm = $('task-modal');
+          if (tm && !tm.classList.contains('hidden')) return;
+          const em = $('export-modal');
+          if (em && !em.classList.contains('hidden')) return;
           const hm = $('help-modal');
           if (!hm.classList.contains('hidden')) { hm.classList.add('hidden'); return; }
           const es = $('export-settings-modal');
@@ -3395,6 +3423,12 @@ guardTarget(t) {
           }
           const cf = $('confirm-modal');
           if (cf && !cf.classList.contains('hidden')) { this._confirmResolve(false); return; }
+          const ct = $('concat-modal');
+          if (ct && !ct.classList.contains('hidden')) {
+            if (this._concatBusy) return;
+            ct.classList.add('hidden');
+            return;
+          }
         }
         if (e.code === 'Enter') {
           e.preventDefault();
@@ -3414,8 +3448,15 @@ guardTarget(t) {
             const jn = $('concat-join');
             if (ins && !ins.classList.contains('hidden') && !ins.disabled) { this.concatInsert(); return; }
             if (jn && !jn.classList.contains('hidden') && !jn.disabled) { this.concatJoin(); return; }
+            if (!this._concatBusy && this._concatFiles.length < 2) { this.concatAddFiles(); return; }
           }
           return;
+        }
+        const ct2 = $('concat-modal');
+        if (ct2 && !ct2.classList.contains('hidden') && !this._concatBusy) {
+          const mod2 = e.ctrlKey || e.metaKey;
+          if (mod2 && e.code === 'KeyO') { e.preventDefault(); this.concatAddFiles(); return; }
+          if (mod2 && e.code === 'KeyS') { e.preventDefault(); this.concatSaveAs(); return; }
         }
         return;
       }
@@ -3440,7 +3481,7 @@ guardTarget(t) {
       if (mod && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
       if (mod && e.code === 'KeyY') { e.preventDefault(); this.redo(); return; }
       if (this.state.sourceMissing) {
-        if (e.code === 'KeyM' || e.code === 'KeyC' || e.code === 'KeyX' || e.code === 'Delete' || e.code === 'Backspace' || e.code === 'KeyR' || e.code === 'KeyE') {
+        if (e.code === 'KeyM' || e.code === 'KeyC' || e.code === 'KeyX' || e.code === 'Delete' || e.code === 'Backspace' || e.code === 'KeyR' || e.code === 'KeyE' || e.code === 'KeyK') {
           e.preventDefault();
           this.setStatus('Locate the missing source file before editing');
           return;
@@ -3451,6 +3492,7 @@ guardTarget(t) {
       if (e.code === 'Space') { e.preventDefault(); this.cancelStepPause(); this.togglePlay(); return; }
       if (e.code === 'KeyW') { e.preventDefault(); this.closeFind(); this.toggleTimelinesPanel(); return; }
       if (e.code === 'KeyJ') { e.preventDefault(); this.closeFind(); this.concatVideos(); return; }
+      if (e.code === 'KeyK') { e.preventDefault(); this.closeFind(); this.setKeys(); return; }
       if (e.code === 'KeyM') { e.preventDefault(); this.timeline.addMarkerAt(this.state.cursor); return; }
       if (e.code === 'KeyC') { e.preventDefault(); this.cancelStepPause(); this.cut(); return; }
       if (e.code === 'KeyX' || e.code === 'Delete' || e.code === 'Backspace') {
@@ -3537,7 +3579,7 @@ guardTarget(t) {
     $('spinner').classList.toggle('hidden', !spin);
   },
 
-  showTaskModal({ title = 'Open file', message = '', indeterminate = true, progress = 0 } = {}) {
+  showTaskModal({ title = 'Open File', message = '', indeterminate = true, progress = 0 } = {}) {
     $('task-modal-title').textContent = title;
     $('task-modal-message').textContent = message;
     const fill = $('task-modal-fill');
@@ -3632,8 +3674,8 @@ guardTarget(t) {
   },
 
   syncExportButton() {
-    $('btn-start').title = 'Previous marker (Ctrl+Shift+S) / Start (Ctrl+Click, Home/End)';
-    $('btn-end').title = 'Next marker (Ctrl+Shift+F) / End (Ctrl+Click, Home/End)';
+    $('btn-start').title = 'Previous Marker (Ctrl+Shift+S) / Start (Ctrl+Click, Home/End)';
+    $('btn-end').title = 'Next Marker (Ctrl+Shift+F) / End (Ctrl+Click, Home/End)';
   },
 
   markerPartsWithContent() {
@@ -4249,6 +4291,7 @@ guardTarget(t) {
         name: path.split(/[\\/]/).pop(),
         src: path,
         srcRel: null,
+        srcAbs: path,
         srcName: null,
         video: null,
         cursor: 0,
@@ -4277,6 +4320,7 @@ guardTarget(t) {
             name: path.split(/[\\/]/).pop(),
             src: path,
             srcRel: null,
+            srcAbs: path,
             srcName: null,
             video: null,
             cursor: 0,
@@ -5036,6 +5080,7 @@ releaseFrameNav() {
       name: t.name || (t.srcName || 'Timeline ' + (i + 1)),
       src: t.src,
       srcRel: t.srcRel || null,
+      srcAbs: t.srcAbs || null,
       srcName: t.srcName || null,
       video: t.video || null,
       cursor: 0,
@@ -5055,10 +5100,7 @@ releaseFrameNav() {
     this.state.projectPath = filePath;
 
     for (const t of this.state.timelines) {
-      if (t.srcRel) {
-        const r = await window.keycut.resolveProjectSource(filePath, t.srcRel);
-        if (r && r.path) t.src = r.path;
-      }
+      await this.resolveTimelineSource(t);
     }
     await this.checkTimelinesExist();
 
@@ -5320,13 +5362,6 @@ releaseFrameNav() {
     const combine = this._exportJoin && joinToggle && !joinToggle.disabled;
     if (combine) {
       this.closeExportSettings();
-      this.showTaskModal({ title: 'Export Project', message: 'Preparing…', indeterminate: true });
-      try {
-        for (const t of timelines) await this.ensureTimelineLoadedForExport(t);
-      } finally {
-        this.hideTaskModal();
-      }
-      this.snapshotActiveTimeline();
       await this.runProjectJoin(timelines, compressOpts);
       return;
     }
@@ -5473,19 +5508,6 @@ releaseFrameNav() {
   },
 
   async runProjectJoin(timelines, compressOpts) {
-    const parts = [];
-    let total = 0;
-    for (const t of timelines) {
-      const runs = this.runsForTimelineData(t);
-      if (!runs.length) continue;
-      parts.push({
-        sourcePath: t.src,
-        segments: runs,
-        duration: runs.reduce((a, s) => a + Math.max(0, (s[1] || 0) - (s[0] || 0)), 0)
-      });
-      total += parts[parts.length - 1].duration;
-    }
-    if (!parts.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
     const firstSrc = timelines[0] && timelines[0].src;
     let allowed = compressOpts ? null : null;
     if (!compressOpts && firstSrc) {
@@ -5501,7 +5523,26 @@ releaseFrameNav() {
     const defaultName = (timelines[0].name || 'timeline').replace(/\.[^.]+$/, '') + '.' + defaultExt;
     const outputPath = compressOpts ? await window.keycut.saveExportDialog(defaultName, true) : await this.pickLosslessOutput(defaultName, allowed, srcExt);
     if (!outputPath) return;
-    this.closeExportSettings();
+    this.showTaskModal({ title: 'Export Project', message: 'Preparing…', indeterminate: true });
+    try {
+      for (const t of timelines) await this.ensureTimelineLoadedForExport(t);
+    } finally {
+      this.hideTaskModal();
+    }
+    this.snapshotActiveTimeline();
+    const parts = [];
+    let total = 0;
+    for (const t of timelines) {
+      const runs = this.runsForTimelineData(t);
+      if (!runs.length) continue;
+      parts.push({
+        sourcePath: t.src,
+        segments: runs,
+        duration: runs.reduce((a, s) => a + Math.max(0, (s[1] || 0) - (s[0] || 0)), 0)
+      });
+      total += parts[parts.length - 1].duration;
+    }
+    if (!parts.length) { this.setStatus('Nothing to export - all segments are deleted'); return; }
     await this.runProjectJoinExport(parts, outputPath, compressOpts, total);
   },
 
@@ -6171,6 +6212,7 @@ releaseFrameNav() {
       name: out.split(/[\\/]/).pop(),
       src: out,
       srcRel: null,
+      srcAbs: out,
       srcName: null,
       video: null,
       cursor: 0,
@@ -6319,7 +6361,10 @@ releaseFrameNav() {
     const act = $('convert-action');
     if (act) { act.textContent = action ? action.text : ''; act.title = action ? action.title : ''; }
     const cancel = $('convert-cancel');
-    if (cancel) { cancel.textContent = 'Cancel'; cancel.title = 'Cancel'; }
+    if (cancel) {
+      cancel.textContent = 'Cancel';
+      cancel.title = (s === 'ready' || s === 'error') ? 'Cancel (Esc)' : 'Cancel';
+    }
   },
 
   convertStartRename() {
@@ -6398,7 +6443,7 @@ releaseFrameNav() {
     if (!res || !res.ok) {
       this._convertState = 'error';
       this._convertMsg = (res && res.error) ? res.error : 'Analysis failed';
-      this._convertAction = { text: 'Close', title: 'Close' };
+      this._convertAction = { text: 'Close', title: 'Close (Enter)' };
       this.renderConvert();
       return;
     }
@@ -6407,10 +6452,10 @@ releaseFrameNav() {
     const enough = res.enough || (fps > 0 && fps <= 2);
     if (enough) {
       this._convertMsg = 'This video has approximately ' + res.avg.toFixed(1) + ' keyframes/sec on average. It already has enough keyframes for precise cutting.';
-      this._convertAction = { text: 'Convert anyway', title: 'Convert anyway' };
+      this._convertAction = { text: 'Convert anyway', title: 'Convert anyway (Enter)' };
     } else {
       this._convertMsg = 'The output file will be significantly larger than the original.';
-      this._convertAction = { text: 'Convert', title: 'Convert' };
+      this._convertAction = { text: 'Convert', title: 'Convert (Enter)' };
     }
     this.renderConvert();
   },
@@ -6451,14 +6496,14 @@ releaseFrameNav() {
     if (!res || !res.ok) {
       this._convertState = 'error';
       this._convertMsg = (res && res.error) ? res.error : 'Conversion failed';
-      this._convertAction = { text: 'Close', title: 'Close' };
+      this._convertAction = { text: 'Close', title: 'Close (Enter)' };
       this.renderConvert();
       return;
     }
     this._convertState = 'done';
     this._convertOutPath = res.out;
     this._convertMsg = 'Conversion complete.';
-    this._convertAction = { text: 'Add timeline', title: 'Add keyframed video as a new timeline and save project' };
+    this._convertAction = { text: 'Add Timeline', title: 'Add keyframed video as a new timeline and save project (Enter)' };
     const fill = $('convert-modal-fill');
     if (fill) fill.style.width = '100%';
     this.renderConvert();
@@ -6489,7 +6534,7 @@ releaseFrameNav() {
   },
 
   async loadPlacedVideo(path, cuts, deleted, markers, cursor, pps, vstart, afterLoad) {
-    this.showTaskModal({ title: 'Open file', message: 'Analyzing…', indeterminate: true });
+    this.showTaskModal({ title: 'Open File', message: 'Analyzing…', indeterminate: true });
     const meta = await window.keycut.probeVideo(path);
     this.hideTaskModal();
     if (!meta || meta.error) {
@@ -6502,6 +6547,7 @@ releaseFrameNav() {
       name: path.split(/[\\/]/).pop(),
       src: path,
       srcRel: null,
+      srcAbs: path,
       srcName: null,
       video: null,
       cursor: 0,
