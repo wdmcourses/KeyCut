@@ -4,7 +4,7 @@ const fs = require('fs');
 const { spawnSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const { registerIpc } = require(path.join(ROOT, 'lib/ipc'));
-const { compressArgs, scaleArgs, NVENC_PHASES, X264_PHASES } = require(path.join(ROOT, 'lib/export'));
+const { compressArgs, scaleArgs, NVENC_PHASES, X264_PHASES, AMF_PHASES, QSV_PHASES, resolveEncoder } = require(path.join(ROOT, 'lib/export'));
 
 const DIR = 'C:/Users/alex/AppData/Local/Temp/opencode/keycut-compress-test';
 const SRC = path.join(DIR, 'src.mp4');
@@ -79,6 +79,34 @@ app.whenReady().then(async () => {
   check('low = crf28', JSON.stringify(X264_PHASES.low) === JSON.stringify(['-crf', '28', '-qmin', '10', '-qmax', '41']), X264_PHASES.low);
   check('mid = crf22', JSON.stringify(X264_PHASES.mid) === JSON.stringify(['-crf', '22', '-qmin', '5', '-qmax', '30']), X264_PHASES.mid);
   check('high = crf16', JSON.stringify(X264_PHASES.high) === JSON.stringify(['-crf', '16', '-qmin', '5', '-qmax', '20']), X264_PHASES.high);
+
+  console.log('[3b] AMF phases');
+  check('low = qp30', JSON.stringify(AMF_PHASES.low) === JSON.stringify(['-rc', 'cqp', '-qp_i', '30', '-qp_p', '30', '-qp_b', '30']), AMF_PHASES.low);
+  check('mid = qp25', JSON.stringify(AMF_PHASES.mid) === JSON.stringify(['-rc', 'cqp', '-qp_i', '25', '-qp_p', '25', '-qp_b', '25']), AMF_PHASES.mid);
+  check('high = qp20', JSON.stringify(AMF_PHASES.high) === JSON.stringify(['-rc', 'cqp', '-qp_i', '20', '-qp_p', '20', '-qp_b', '20']), AMF_PHASES.high);
+
+  console.log('[3c] QSV phases');
+  check('low = global_quality 30', JSON.stringify(QSV_PHASES.low) === JSON.stringify(['-look_ahead', '0', '-global_quality', '30']), QSV_PHASES.low);
+  check('mid = global_quality 25', JSON.stringify(QSV_PHASES.mid) === JSON.stringify(['-look_ahead', '0', '-global_quality', '25']), QSV_PHASES.mid);
+  check('high = global_quality 20', JSON.stringify(QSV_PHASES.high) === JSON.stringify(['-look_ahead', '0', '-global_quality', '20']), QSV_PHASES.high);
+
+  console.log('[3d] resolveEncoder probes real hardware');
+  const enc = await resolveEncoder(ff);
+  const allEncoders = run(['-hide_banner', '-encoders']).out;
+  check('resolved encoder is one of nvenc/amf/qsv/x264', ['h264_nvenc', 'h264_amf', 'h264_qsv', 'libx264'].includes(enc), enc);
+  if (enc !== 'libx264') {
+    check('resolved encoder is compiled into ffmpeg', allEncoders.includes(enc), { enc });
+    const probeRun = run(['-hide_banner', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=256x256:r=1:d=0.1', '-frames:v', '1', '-c:v', enc, '-f', 'null', '-']);
+    check('resolved encoder actually encodes on this machine', probeRun.ok, probeRun.out.slice(-200));
+  } else {
+    const anyGpu = ['h264_nvenc', 'h264_amf', 'h264_qsv'].filter((e) => allEncoders.includes(e));
+    if (anyGpu.length) {
+      const gpuProbe = run(['-hide_banner', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=256x256:r=1:d=0.1', '-frames:v', '1', '-c:v', anyGpu[0], '-f', 'null', '-']);
+      check('fallback to x264 only because GPU encoders failed probe', !gpuProbe.ok, gpuProbe.out.slice(-200));
+    } else {
+      check('fallback to x264 because no GPU encoders compiled', true);
+    }
+  }
 
   console.log('[4] compressArgs assembly');
   const caLow = await compressArgs({ ffmpeg: ff, resolution: '1080', quality: 'low' });
