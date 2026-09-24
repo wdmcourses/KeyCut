@@ -15,7 +15,8 @@
     "test:history": "electron tests/test-history.js",
     "test:panel": "electron tests/test-panel.js",
     "test:runs": "electron tests/test-runs.js",
-    "test:export": "electron tests/test-export-folder.js"
+    "test:export": "electron tests/test-export-folder.js",
+    "test:compress": "electron tests/test-compress.js"
   },
   "author": "KeyCut",
   "license": "MIT",
