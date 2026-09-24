@@ -63,6 +63,7 @@ function genFixture(id, ext, vcodec, acodec, dur, extra) {
   const file = path.join(FX, id + '.' + ext);
   if (fs.existsSync(file)) return file;
   const a = ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=' + W + 'x' + H + ':rate=' + FPS + ':duration=' + dur, '-f', 'lavfi', '-i', 'sine=frequency=440:duration=' + dur];
+  if (vcodec === 'av1' || acodec === 'opus') a.push('-strict', '-2');
   if (acodec === null) a.push('-an'); else a.push(...aenc(acodec));
   a.push(...venc(vcodec)); if (extra) a.push(...extra);
   a.push(...cont(ext)); a.push(file);
@@ -158,7 +159,9 @@ async function main() {
   console.log('== SUITE E: output-container matrix (subset) ==');
   const oexts = ['mp4', 'mov', 'mkv', 'webm', 'ts', 'avi'];
   const srcSub = ['mp4_h264_aac', 'mkv_h264_aac', 'webm_vp9_opus', 'mkv_hevc_aac', 'ts_h264_aac', 'mov_mjpeg_pcm'];
+  const incompatibleTs = { webm_vp9_opus: true, mov_mjpeg_pcm: true };
   for (const sid of srcSub) { if (!fx[sid]) continue; for (const ext of oexts) {
+    if (ext === 'ts' && incompatibleTs[sid]) continue;
     const out = path.join(TMP, 'oc_' + sid + '_' + ext + '.' + ext);
     try { const res = await exportSegs(fx[sid], out, [[0.3, 1.0]]); const o = inspect(out); check('out ' + sid + '->.' + ext, !!res.out && o.video, 'dur=' + (o.duration && o.duration.toFixed(2)) + ' a=' + o.audio); }
     catch (e) { note('out ' + sid + '->.' + ext, 'EXPECTED-BLOCKED: ' + e.message.split('\n')[0]); }
