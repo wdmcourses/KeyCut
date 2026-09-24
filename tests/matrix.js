@@ -119,7 +119,7 @@ async function exportSegsPost(src, out, segs) {
   const tmp = fs2.mkdtempSync(path.join(TMP, 'xp-'));
   const list = segs.map((s, i) => { const p = path.join(tmp, 'p' + i + '.mkv'); runFF(['-y', '-v', 'error', '-i', src, '-ss', s[0].toFixed(6), '-t', (s[1] - s[0]).toFixed(6), '-c', 'copy', '-avoid_negative_ts', 'make_zero', '-ignore_unknown', p]); return p; });
   fs2.writeFileSync(path.join(tmp, 'l.txt'), list.map((p) => "file '" + p.replace(/\\/g, '/') + "'").join('\n') + '\n', 'utf8');
-  runFF(['-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', path.join(tmp, 'l.txt'), '-c', 'copy', '-default_mode', 'infer_no_subs', out]);
+  runFF(['-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', path.join(tmp, 'l.txt'), '-c', 'copy', out]);
   return { ok: true, out };
 }
 
@@ -256,6 +256,7 @@ async function extraFrameStats() {
 function printReport() {
   const lines = ['='.repeat(70), 'KeyCut MATRIX TEST REPORT', '='.repeat(70), 'TOTAL: ' + pass + ' pass, ' + fail + ' fail, ' + skip + ' skip', ''];
   lines.push('--- FAIL ---'); for (const [st, n, d] of results) if (st === 'FAIL') lines.push('FAIL  ' + n + ' :: ' + d);
+  lines.push(''); lines.push('--- SKIP ---'); for (const [st, n, d] of results) if (st === 'SKIP') lines.push('SKIP  ' + n + ' :: ' + d);
   lines.push(''); lines.push('--- INFO (measurements / expected-blocks / stats) ---');
   for (const [st, n, d] of results) if (st === 'INFO') lines.push(n + ' :: ' + d);
   const reportPath = path.join(WORK, 'report.txt');

@@ -2048,6 +2048,7 @@ const app = {
     exportSettings: {
       compress: false,
       resolution: 'origin',
+      quality: 'low',
       blocks: false
     },
     _exportMode: 'project',
@@ -3118,6 +3119,9 @@ const app = {
     $('confirm-cancel').addEventListener('click', () => this._confirmResolve(false));
     for (const b of document.querySelectorAll('.res-opt')) {
       b.addEventListener('click', () => this.setExportResolution(b.dataset.res));
+    }
+    for (const b of document.querySelectorAll('.quality-opt')) {
+      b.addEventListener('click', () => this.setExportQuality(b.dataset.quality));
     }
     $('btn-play').addEventListener('click', () => this.togglePlay());
     $('btn-start').addEventListener('click', (e) => this.navPause(() => { if (e.shiftKey || e.ctrlKey) this.seekTo(0); else this.homeNav(); }));
@@ -5071,6 +5075,7 @@ releaseFrameNav() {
       this.state.exportSettings = {
         compress: !!data.exportSettings.compress,
         resolution: data.exportSettings.resolution || 'origin',
+        quality: data.exportSettings.quality || 'low',
         blocks: !!data.exportSettings.blocks
       };
     }
@@ -5143,7 +5148,7 @@ releaseFrameNav() {
     this.state.activeTimelineId = null;
     this.state.projectPath = null;
     this._tlSeq = 0;
-    this.state.exportSettings = { compress: false, resolution: 'origin', blocks: false };
+    this.state.exportSettings = { compress: false, resolution: 'origin', quality: 'low', blocks: false };
     this.state.waveform.slices.clear();
     this.state.waveform.pending.clear();
     this._skipFitWindow = false;
@@ -5179,7 +5184,9 @@ releaseFrameNav() {
     $('export-compress-toggle').textContent = es.compress ? 'Compress: ON' : 'Compress: OFF';
     $('export-compress-toggle').classList.toggle('btn--primary', !!es.compress);
     $('export-resolution-row').classList.toggle('hidden', !es.compress);
+    $('export-quality-row').classList.toggle('hidden', !es.compress);
     this.setExportResolution(es.resolution);
+    this.syncExportQualityUI();
     this.openExportSettings();
     this.closeFind();
   },
@@ -5199,7 +5206,9 @@ releaseFrameNav() {
     $('export-compress-toggle').textContent = es.compress ? 'Compress: ON' : 'Compress: OFF';
     $('export-compress-toggle').classList.toggle('btn--primary', !!es.compress);
     $('export-resolution-row').classList.toggle('hidden', !es.compress);
+    $('export-quality-row').classList.toggle('hidden', !es.compress);
     this.setExportResolution(es.resolution);
+    this.syncExportQualityUI();
     const jr = $('export-join-row');
     jr.classList.remove('hidden');
     const toggle = $('export-join-toggle');
@@ -5240,7 +5249,9 @@ releaseFrameNav() {
     $('export-compress-toggle').textContent = es.compress ? 'Compress: ON' : 'Compress: OFF';
     $('export-compress-toggle').classList.toggle('btn--primary', !!es.compress);
     $('export-resolution-row').classList.toggle('hidden', !es.compress);
+    $('export-quality-row').classList.toggle('hidden', !es.compress);
     this.setExportResolution(es.resolution);
+    this.syncExportQualityUI();
     this.openExportSettings();
   },
 
@@ -5319,7 +5330,21 @@ releaseFrameNav() {
     btn.classList.toggle('btn--primary', this.state.exportSettings.compress);
     btn.textContent = this.state.exportSettings.compress ? 'Compress: ON' : 'Compress: OFF';
     $('export-resolution-row').classList.toggle('hidden', !this.state.exportSettings.compress);
+    $('export-quality-row').classList.toggle('hidden', !this.state.exportSettings.compress);
     this.markDirty();
+  },
+
+  setExportQuality(q) {
+    this.state.exportSettings.quality = q;
+    this.syncExportQualityUI();
+    this.markDirty();
+  },
+
+  syncExportQualityUI() {
+    const q = this.state.exportSettings.quality || 'low';
+    for (const b of document.querySelectorAll('.quality-opt')) {
+      b.classList.toggle('btn--primary', b.dataset.quality === q);
+    }
   },
 
   setExportResolution(res) {
@@ -5333,7 +5358,7 @@ releaseFrameNav() {
   async doExport() {
     const es = this.state.exportSettings;
     if (this.compat) this.compat.stop();
-    const compressOpts = es.compress ? { compress: true, resolution: es.resolution } : null;
+    const compressOpts = es.compress ? { compress: true, resolution: es.resolution, quality: es.quality } : null;
     try {
       if (this._exportMode === 'segment') {
         const id = this._segmentMarkerId;
@@ -5587,6 +5612,7 @@ releaseFrameNav() {
       outputPath,
       compress: compressOpts ? true : false,
       resolution: compressOpts ? compressOpts.resolution : 'origin',
+      quality: compressOpts ? compressOpts.quality : 'low',
       duration: total
     });
     unsub();
@@ -5907,6 +5933,7 @@ releaseFrameNav() {
         streams: job.streams || this.state.streams,
         compress: compressOpts ? true : null,
         resolution: compressOpts ? compressOpts.resolution : null,
+        quality: compressOpts ? compressOpts.quality : 'low',
         duration: jobDur > 0 ? jobDur : this.state.duration
       });
       if (!(res && res.ok)) { ok = false; lastErr = res && res.error ? res.error : 'unknown error'; break; }
