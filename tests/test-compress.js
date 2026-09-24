@@ -118,6 +118,16 @@ app.whenReady().then(async () => {
   const caBad = await compressArgs({ ffmpeg: ff, resolution: 'origin', quality: 'bogus' });
   check('unknown quality falls back to low (cq24/crf28)', caBad.includes('24') || caBad.includes('28'), caBad);
 
+  console.log('[4b] gpu toggle forces CPU');
+  const caGpuOff = await compressArgs({ ffmpeg: ff, resolution: '720', quality: 'low', gpu: false });
+  check('gpu:false forces libx264', caGpuOff.includes('libx264') && !['h264_nvenc', 'h264_amf', 'h264_qsv'].some((c) => caGpuOff.includes(c)), caGpuOff);
+  check('gpu:false keeps crf28 low phase', caGpuOff.includes('-crf') && caGpuOff.includes('28'), caGpuOff);
+  check('gpu:false keeps scale vf', caGpuOff.some((a) => a === 'scale=1280:-2:flags=lanczos'), caGpuOff);
+  const caGpuDefault = await compressArgs({ ffmpeg: ff, resolution: '720', quality: 'low' });
+  const caGpuOn = await compressArgs({ ffmpeg: ff, resolution: '720', quality: 'low', gpu: true });
+  check('gpu default/true uses resolved encoder', caGpuDefault.includes('h264_nvenc') || caGpuDefault.includes('libx264'), caGpuDefault);
+  check('gpu:true matches gpu default', JSON.stringify(caGpuOn) === JSON.stringify(caGpuDefault), caGpuOn);
+
   console.log('[5] real NVENC/CPU encode through compressArgs');
   const srcArg = SRC.replace(/\\/g, '/');
   const cargs = await compressArgs({ ffmpeg: ff, resolution: 'origin', quality: 'low' });
@@ -158,6 +168,22 @@ app.whenReady().then(async () => {
   await js(`window.__app.state.exportSettings.compress = true; window.__app.toggleExportCompress();`);
   const uiOff = await js(`({ hidden: document.getElementById('export-quality-row').classList.contains('hidden'), compress: window.__app.state.exportSettings.compress })`);
   check('quality row hidden when compress off', uiOff.hidden === true && uiOff.compress === false, uiOff);
+
+  console.log('[7b] UI: gpu toggle in export settings');
+  await js(`window.__app.state.exportSettings.compress = true; window.__app.state.exportSettings.gpu = true; window.__app.export();`);
+  await new Promise((r) => setTimeout(r, 200));
+  const gpuOn = await js(`(() => {
+    const row = document.getElementById('export-gpu-row');
+    const sw = document.getElementById('export-gpu-toggle');
+    return { display: row.style.display, checked: sw.checked, gpu: window.__app.state.exportSettings.gpu };
+  })()`);
+  check('gpu row visible when compress on', gpuOn.display !== 'none' && gpuOn.checked, gpuOn);
+  await js(`document.getElementById('export-gpu-toggle').click()`);
+  const gpuOff = await js(`({ gpu: window.__app.state.exportSettings.gpu, checked: document.getElementById('export-gpu-toggle').checked })`);
+  check('toggle off sets gpu false', gpuOff.gpu === false && gpuOff.checked === false, gpuOff);
+  await js(`window.__app.state.exportSettings.compress = true; window.__app.toggleExportCompress();`);
+  const gpuHidden = await js(`({ display: document.getElementById('export-gpu-row').style.display })`);
+  check('gpu row hidden when compress off', gpuHidden.display === 'none', gpuHidden);
 
   console.log('[8] 4.2.2 compat: no default_mode / fps_mode / display_rotation');
   const srcTxt = fs.readFileSync(path.join(ROOT, 'lib', 'export.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'lib', 'ipc.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'lib', 'concat.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'lib', 'compatPlayer.js'), 'utf8');

@@ -2049,7 +2049,8 @@ const app = {
       compress: false,
       resolution: 'origin',
       quality: 'low',
-      blocks: false
+      blocks: false,
+      gpu: true
     },
     _exportMode: 'project',
     _segmentMarkerId: null
@@ -3113,6 +3114,10 @@ const app = {
     $('export-compress-toggle').addEventListener('click', () => this.toggleExportCompress());
     $('export-blocks-separate').addEventListener('change', () => {
       this.state.exportSettings.blocks = $('export-blocks-separate').checked;
+      this.markDirty();
+    });
+    $('export-gpu-toggle').addEventListener('change', () => {
+      this.state.exportSettings.gpu = $('export-gpu-toggle').checked;
       this.markDirty();
     });
     $('confirm-ok').addEventListener('click', () => this._confirmResolve(true));
@@ -5076,7 +5081,8 @@ releaseFrameNav() {
         compress: !!data.exportSettings.compress,
         resolution: data.exportSettings.resolution || 'origin',
         quality: data.exportSettings.quality || 'low',
-        blocks: !!data.exportSettings.blocks
+        blocks: !!data.exportSettings.blocks,
+        gpu: data.exportSettings.gpu !== false
       };
     }
 
@@ -5148,7 +5154,7 @@ releaseFrameNav() {
     this.state.activeTimelineId = null;
     this.state.projectPath = null;
     this._tlSeq = 0;
-    this.state.exportSettings = { compress: false, resolution: 'origin', quality: 'low', blocks: false };
+    this.state.exportSettings = { compress: false, resolution: 'origin', quality: 'low', blocks: false, gpu: true };
     this.state.waveform.slices.clear();
     this.state.waveform.pending.clear();
     this._skipFitWindow = false;
@@ -5187,6 +5193,7 @@ releaseFrameNav() {
     $('export-quality-row').classList.toggle('hidden', !es.compress);
     this.setExportResolution(es.resolution);
     this.syncExportQualityUI();
+    this.syncExportGpuUI();
     this.openExportSettings();
     this.closeFind();
   },
@@ -5209,6 +5216,7 @@ releaseFrameNav() {
     $('export-quality-row').classList.toggle('hidden', !es.compress);
     this.setExportResolution(es.resolution);
     this.syncExportQualityUI();
+    this.syncExportGpuUI();
     const jr = $('export-join-row');
     jr.classList.remove('hidden');
     const toggle = $('export-join-toggle');
@@ -5252,6 +5260,7 @@ releaseFrameNav() {
     $('export-quality-row').classList.toggle('hidden', !es.compress);
     this.setExportResolution(es.resolution);
     this.syncExportQualityUI();
+    this.syncExportGpuUI();
     this.openExportSettings();
   },
 
@@ -5331,12 +5340,14 @@ releaseFrameNav() {
     btn.textContent = this.state.exportSettings.compress ? 'Compress: ON' : 'Compress: OFF';
     $('export-resolution-row').classList.toggle('hidden', !this.state.exportSettings.compress);
     $('export-quality-row').classList.toggle('hidden', !this.state.exportSettings.compress);
+    this.syncExportGpuUI();
     this.markDirty();
   },
 
   setExportQuality(q) {
     this.state.exportSettings.quality = q;
     this.syncExportQualityUI();
+    this.syncExportGpuUI();
     this.markDirty();
   },
 
@@ -5345,6 +5356,13 @@ releaseFrameNav() {
     for (const b of document.querySelectorAll('.quality-opt')) {
       b.classList.toggle('btn--primary', b.dataset.quality === q);
     }
+  },
+
+  syncExportGpuUI() {
+    const es = this.state.exportSettings;
+    const show = isWindowsPlatform() && es.compress;
+    $('export-gpu-row').style.display = show ? '' : 'none';
+    $('export-gpu-toggle').checked = es.gpu !== false;
   },
 
   setExportResolution(res) {
@@ -5358,7 +5376,7 @@ releaseFrameNav() {
   async doExport() {
     const es = this.state.exportSettings;
     if (this.compat) this.compat.stop();
-    const compressOpts = es.compress ? { compress: true, resolution: es.resolution, quality: es.quality } : null;
+    const compressOpts = es.compress ? { compress: true, resolution: es.resolution, quality: es.quality, gpu: es.gpu !== false } : null;
     try {
       if (this._exportMode === 'segment') {
         const id = this._segmentMarkerId;
@@ -5613,6 +5631,7 @@ releaseFrameNav() {
       compress: compressOpts ? true : false,
       resolution: compressOpts ? compressOpts.resolution : 'origin',
       quality: compressOpts ? compressOpts.quality : 'low',
+      gpu: compressOpts ? compressOpts.gpu : true,
       duration: total
     });
     unsub();
@@ -5934,6 +5953,7 @@ releaseFrameNav() {
         compress: compressOpts ? true : null,
         resolution: compressOpts ? compressOpts.resolution : null,
         quality: compressOpts ? compressOpts.quality : 'low',
+        gpu: compressOpts ? compressOpts.gpu : true,
         duration: jobDur > 0 ? jobDur : this.state.duration
       });
       if (!(res && res.ok)) { ok = false; lastErr = res && res.error ? res.error : 'unknown error'; break; }
