@@ -25,7 +25,7 @@ output keeps the original quality and the whole operation is fast.</p>
 - Export the kept segments as a single file, losslessly
 - Export each marker block as its own file
 - Split, delete, restore and merge segments directly on the timeline; resize edges, multi-select
-- Optional compression: universal x264 preset with resolution presets – Origin / 720p / 1080p / 1440p / 2160p
+- Optional compression: low, mid, high presets with resolution presets – Origin / 720p / 1080p / 1440p / 2160p
 - Timeline with audio waveform, keyframe snapping, zoom and frame stepping
 - Set keys: re-key a clip at 2 / 6 / 10 keyframes per second for frame-level precision
 

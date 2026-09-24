@@ -58,17 +58,17 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 600));
   const js = (c) => win.webContents.executeJavaScript(c);
 
-  console.log('[1] scaleArgs (lanczos conventions)');
+  console.log('[1] scaleArgs (bilinear conventions)');
   const sOrigin = scaleArgs('origin');
-  check('origin uses iw:ceil(ih/4)*4', JSON.stringify(sOrigin) === JSON.stringify(['-vf', 'scale=iw:ceil(ih/4)*4:flags=lanczos']), sOrigin);
+  check('origin uses iw:ceil(ih/4)*4', JSON.stringify(sOrigin) === JSON.stringify(['-vf', 'scale=iw:ceil(ih/4)*4:flags=bilinear']), sOrigin);
   const s720 = scaleArgs('720');
-  check('720p -> width 1280', s720[1] === 'scale=1280:-2:flags=lanczos', s720);
+  check('720p -> width 1280', s720[1] === 'scale=1280:-2:flags=bilinear', s720);
   const s1080 = scaleArgs('1080');
-  check('1080p -> width 1920', s1080[1] === 'scale=1920:-2:flags=lanczos', s1080);
+  check('1080p -> width 1920', s1080[1] === 'scale=1920:-2:flags=bilinear', s1080);
   const s1440 = scaleArgs('1440');
-  check('1440p -> width 2560', s1440[1] === 'scale=2560:-2:flags=lanczos', s1440);
+  check('1440p -> width 2560', s1440[1] === 'scale=2560:-2:flags=bilinear', s1440);
   const s2160 = scaleArgs('2160');
-  check('2160p -> width 3840', s2160[1] === 'scale=3840:-2:flags=lanczos', s2160);
+  check('2160p -> width 3840', s2160[1] === 'scale=3840:-2:flags=bilinear', s2160);
 
   console.log('[2] NVENC phases');
   check('low = cq24', JSON.stringify(NVENC_PHASES.low) === JSON.stringify(['-rc', 'vbr_hq', '-cq', '24', '-qmin', '2', '-qmax', '41']), NVENC_PHASES.low);
@@ -110,8 +110,8 @@ app.whenReady().then(async () => {
 
   console.log('[4] compressArgs assembly');
   const caLow = await compressArgs({ ffmpeg: ff, resolution: '1080', quality: 'low' });
-  check('has scale vf', caLow.some((a) => a === '-vf') && caLow.some((a) => a === 'scale=1920:-2:flags=lanczos'), caLow);
-  check('has audio 256k/48k/stereo', caLow.includes('-c:a') && caLow.includes('aac') && caLow.includes('-b:a') && caLow.includes('256k') && caLow.includes('-ar') && caLow.includes('48000') && caLow.includes('-ac') && caLow.includes('2'), caLow);
+  check('has scale vf', caLow.some((a) => a === '-vf') && caLow.some((a) => a === 'scale=1920:-2:flags=bilinear'), caLow);
+  check('has audio 320k/48k/stereo', caLow.includes('-c:a') && caLow.includes('aac') && caLow.includes('-b:a') && caLow.includes('320k') && caLow.includes('-ar') && caLow.includes('48000') && caLow.includes('-ac') && caLow.includes('2'), caLow);
   check('chooses nvenc or x264', caLow.includes('h264_nvenc') || caLow.includes('libx264'), caLow);
   const caMid = await compressArgs({ ffmpeg: ff, resolution: 'origin', quality: 'mid' });
   check('mid carries cq22 or crf22', caMid.includes('-cq') ? caMid.includes('22') : caMid.includes('-crf') && caMid.includes('22'), caMid);
@@ -122,7 +122,7 @@ app.whenReady().then(async () => {
   const caGpuOff = await compressArgs({ ffmpeg: ff, resolution: '720', quality: 'low', gpu: false });
   check('gpu:false forces libx264', caGpuOff.includes('libx264') && !['h264_nvenc', 'h264_amf', 'h264_qsv'].some((c) => caGpuOff.includes(c)), caGpuOff);
   check('gpu:false keeps crf28 low phase', caGpuOff.includes('-crf') && caGpuOff.includes('28'), caGpuOff);
-  check('gpu:false keeps scale vf', caGpuOff.some((a) => a === 'scale=1280:-2:flags=lanczos'), caGpuOff);
+  check('gpu:false keeps scale vf', caGpuOff.some((a) => a === 'scale=1280:-2:flags=bilinear'), caGpuOff);
   const caGpuDefault = await compressArgs({ ffmpeg: ff, resolution: '720', quality: 'low' });
   const caGpuOn = await compressArgs({ ffmpeg: ff, resolution: '720', quality: 'low', gpu: true });
   check('gpu default/true uses resolved encoder', caGpuDefault.includes('h264_nvenc') || caGpuDefault.includes('libx264'), caGpuDefault);
