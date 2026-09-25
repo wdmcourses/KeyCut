@@ -5,6 +5,7 @@ const { spawnSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const { registerIpc } = require(path.join(ROOT, 'lib/ipc'));
 const { compressArgs, scaleArgs, NVENC_PHASES, X264_PHASES, AMF_PHASES, QSV_PHASES, resolveEncoder } = require(path.join(ROOT, 'lib/export'));
+const { renderWaveformPng } = require(path.join(ROOT, 'lib/waveform'));
 
 const DIR = 'C:/Users/alex/AppData/Local/Temp/opencode/keycut-compress-test';
 const SRC = path.join(DIR, 'src.mp4');
@@ -185,7 +186,12 @@ app.whenReady().then(async () => {
   const gpuHidden = await js(`({ display: document.getElementById('export-gpu-row').style.display })`);
   check('gpu row hidden when compress off', gpuHidden.display === 'none', gpuHidden);
 
-  console.log('[8] 4.2.2 compat: no default_mode / fps_mode / display_rotation');
+  console.log('[8] waveform renderWaveformPng');
+  const wf = await renderWaveformPng({ filePath: SRC, start: 0, duration: 1, streamIndex: 1, width: 200, height: 100, color: 'white', ffmpeg: ff });
+  check('waveform png produced', Buffer.isBuffer(wf) && wf.length > 50, wf && wf.length);
+  check('waveform png signature', wf && wf[0] === 0x89 && wf[1] === 0x50 && wf[2] === 0x4e && wf[3] === 0x47);
+
+  console.log('[8a] 4.2.2 compat: no default_mode / fps_mode / display_rotation');
   const srcTxt = fs.readFileSync(path.join(ROOT, 'lib', 'export.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'lib', 'ipc.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'lib', 'concat.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'lib', 'compatPlayer.js'), 'utf8');
   check('no default_mode flag', !/default_mode/.test(srcTxt));
   check('no fps_mode flag', !/fps_mode/.test(srcTxt));

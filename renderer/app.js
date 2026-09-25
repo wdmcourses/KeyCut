@@ -812,6 +812,7 @@ class Timeline {
         this.updateScrollbar();
         if (this.thumbEl) this.thumbEl.classList.remove('dragging');
         app.endDragCursor();
+        if (mode === 'pan' && !this.ctrlHeld) app.ensureCursorVisible();
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
         window.removeEventListener('pointerlockchange', onLockChange);
@@ -1305,6 +1306,7 @@ toggleSelectSegment(i) {
 
   onUp() {
     app.endDragCursor();
+    const wasPan = this.drag && this.drag.mode === 'pan';
     if (this.drag && this.drag.mode === 'scrub' && this.onScrubEnd) this.onScrubEnd();
     const wasMarker = this.drag && this.drag.mode === 'marker';
     const markerId = wasMarker ? this.drag.id : null;
@@ -1316,6 +1318,7 @@ toggleSelectSegment(i) {
     this.endResizeDrag();
     this.drag = null;
     this.canvas.style.cursor = 'default';
+    if (wasPan && !this.ctrlHeld) app.ensureCursorVisible();
     if (pendingSelect != null) this.extendSelectRange(pendingSelect, pendingAnchor);
     if (pendingMid) {
       if (!moved && midX != null) this.toggleMarkerAtX(midX);
@@ -1390,6 +1393,10 @@ toggleSelectSegment(i) {
     this.ctrlHeld = v;
     this.needsRender = true;
     this.tick();
+    if (!v) {
+      this.zoomActive = false;
+      if (!this.drag && !this.scrollbarDragging && app && app.ensureCursorVisible) app.ensureCursorVisible();
+    }
   }
 
   setShiftHeld(v) {
@@ -1488,6 +1495,7 @@ toggleSelectSegment(i) {
     if (this.drag) return;
     if (e.ctrlKey) {
       
+      this.zoomActive = true;
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const factor = e.deltaY < 0 ? 1.4 : 1 / 1.4;
@@ -3244,7 +3252,7 @@ const app = {
       setTimeout(() => this.updateFitButtons(), 150);
     });
     this.video.addEventListener('timeupdate', () => {
-      if (!this.video.paused && !this.timeline.drag && !this.timeline.scrollbarDragging) this.guardPlayback();
+      if (!this.video.paused) this.guardPlayback();
     });
     this.video.addEventListener('play', () => {
       this.timeline.playing = true;
@@ -3277,7 +3285,7 @@ const app = {
   startPlaybackGuard() {
     if (this._pg) return;
     const tick = () => {
-      if (!this.video.paused && !this.timeline.drag && !this.timeline.scrollbarDragging) this.guardPlayback();
+      if (!this.video.paused) this.guardPlayback();
       this._pg = requestAnimationFrame(tick);
     };
     this._pg = requestAnimationFrame(tick);
@@ -3288,6 +3296,8 @@ const app = {
   },
 
   guardPlayback() {
+    const tl = this.timeline;
+    const gesture = !!(tl && (tl.drag || tl.scrollbarDragging || tl.zoomActive));
     const g = this.guardTarget(this.video.currentTime);
     if (g) {
       if (g.type === 'pause') {
@@ -3317,7 +3327,7 @@ const app = {
       this.timeline.needsRender = true;
       this.timeline.tick();
       this.updateTimeDisplay();
-      this.ensureCursorVisible();
+      if (!gesture && !tl.ctrlHeld) this.ensureCursorVisible();
     }
   },
 
