@@ -40,7 +40,7 @@ output keeps the original quality and the whole operation is fast.</p>
 | Ctrl+F · Enter / Shift+Enter | Find marker · Next / Prev |
 | Shift + Drag | Scrub without snapping |
 | 0 / 1 | Fit entire timeline |
-| 2 | 20 seconds around caret |
+| 2 | 10 seconds around caret |
 | C | Cut at caret |
 | X / Delete | Delete segment |
 | R | Restore segment |

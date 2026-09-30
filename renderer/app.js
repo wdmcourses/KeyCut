@@ -812,7 +812,7 @@ class Timeline {
         this.updateScrollbar();
         if (this.thumbEl) this.thumbEl.classList.remove('dragging');
         app.endDragCursor();
-        if (mode === 'pan' && !this.ctrlHeld) app.ensureCursorVisible();
+        if (mode === 'pan' && !this.ctrlHeld && app.video && !app.video.paused) app.ensureCursorVisible();
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
         window.removeEventListener('pointerlockchange', onLockChange);
@@ -1318,7 +1318,7 @@ toggleSelectSegment(i) {
     this.endResizeDrag();
     this.drag = null;
     this.canvas.style.cursor = 'default';
-    if (wasPan && !this.ctrlHeld) app.ensureCursorVisible();
+    if (wasPan && !this.ctrlHeld && app.video && !app.video.paused) app.ensureCursorVisible();
     if (pendingSelect != null) this.extendSelectRange(pendingSelect, pendingAnchor);
     if (pendingMid) {
       if (!moved && midX != null) this.toggleMarkerAtX(midX);
@@ -1395,7 +1395,7 @@ toggleSelectSegment(i) {
     this.tick();
     if (!v) {
       this.zoomActive = false;
-      if (!this.drag && !this.scrollbarDragging && app && app.ensureCursorVisible) app.ensureCursorVisible();
+      if (!this.drag && !this.scrollbarDragging && app && !app.video.paused && app.ensureCursorVisible) app.ensureCursorVisible();
     }
   }
 
@@ -3552,7 +3552,7 @@ guardTarget(t) {
       }
       if (e.code === 'Digit2') {
         e.preventDefault();
-        this.zoomToOneMinute();
+        this.zoomAroundCaret();
         return;
       }
       if (e.code === 'KeyS' || e.code === 'ArrowLeft') {
@@ -4947,10 +4947,10 @@ releaseFrameNav() {
     this.ensureCursorVisible();
   },
 
-  zoomToOneMinute() {
+  zoomAroundCaret() {
     const tl = this.timeline;
     if (!tl || this.state.duration <= 0) return;
-    const viewW = 20;
+    const viewW = 10;
     const pps = tl.w / viewW;
     const clamped = Math.max(tl.minZoom(), Math.min(tl.maxZoom(), pps));
     const cursor = Math.min(Math.max(0, this.state.cursor), this.state.duration);
