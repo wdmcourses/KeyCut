@@ -1230,6 +1230,32 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
   font-weight: 600;
 }
 
+/* Success state (inside the export modal) */
+.export-done { display: block; }
+.success-row { display: flex; align-items: center; gap: 10px; }
+.success-icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--success);
+  color: var(--text-on-solid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.success-body { min-width: 0; }
+.success-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.success-detail {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+  word-break: break-all;
+  max-height: 54px;
+  overflow-y: auto;
+}
+.success-detail.hidden { display: none; }
+
 .ext-item { display: flex; flex-direction: column; }
 .ext-head { cursor: pointer; }
 .ext-options {
@@ -1313,6 +1339,10 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
   animation: convert-indeterminate 1.4s ease-in-out infinite;
 }
 #task-modal-fill.indeterminate {
+  width: 30%;
+  animation: convert-indeterminate 1.4s ease-in-out infinite;
+}
+#export-modal-fill.indeterminate {
   width: 30%;
   animation: convert-indeterminate 1.4s ease-in-out infinite;
 }

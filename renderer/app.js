@@ -3136,6 +3136,7 @@ const app = {
     });
     $('confirm-ok').addEventListener('click', () => this._confirmResolve(true));
     $('confirm-cancel').addEventListener('click', () => this._confirmResolve(false));
+    $('export-done-close').addEventListener('click', () => this.closeExportDone());
     for (const b of document.querySelectorAll('.res-opt')) {
       b.addEventListener('click', () => this.setExportResolution(b.dataset.res));
     }
@@ -3433,6 +3434,7 @@ guardTarget(t) {
         if (e.code === 'Escape') {
           e.preventDefault();
           this.cancelStepPause();
+          if (this._exportDone && !$('export-modal').classList.contains('hidden')) { this.closeExportDone(); return; }
           const tm = $('task-modal');
           if (tm && !tm.classList.contains('hidden')) return;
           const em = $('export-modal');
@@ -3457,6 +3459,7 @@ guardTarget(t) {
         }
         if (e.code === 'Enter') {
           e.preventDefault();
+          if (this._exportDone && !$('export-modal').classList.contains('hidden')) { this.closeExportDone(); return; }
           const es = $('export-settings-modal');
           if (es && !es.classList.contains('hidden')) { this.doExport(); return; }
           const cm = $('convert-modal');
@@ -5314,6 +5317,34 @@ releaseFrameNav() {
     return this.confirmDialog(message, Object.assign({ okText: 'OK', cancelHidden: true }, opts));
   },
 
+  prepareExportModal() {
+    this._exportDone = false;
+    $('export-modal-msgbox').classList.remove('hidden');
+    $('export-modal-bar').classList.remove('hidden');
+    $('export-done').classList.add('hidden');
+    $('export-done-close').style.display = 'none';
+  },
+
+  showExportDone(detail) {
+    this._exportDone = true;
+    const d = $('export-done-detail');
+    d.textContent = detail || '';
+    d.classList.toggle('hidden', !detail);
+    $('export-modal-msgbox').classList.add('hidden');
+    $('export-modal-bar').classList.add('hidden');
+    $('export-cancel').style.display = 'none';
+    $('export-done').classList.remove('hidden');
+    $('export-done-close').style.display = '';
+    $('export-modal').classList.remove('hidden');
+  },
+
+  closeExportDone() {
+    this._exportDone = false;
+    $('export-modal').classList.add('hidden');
+    $('export-done').classList.add('hidden');
+    $('export-done-close').style.display = 'none';
+  },
+
   closeExportSettings() {
     $('export-settings-modal').classList.add('hidden');
   },
@@ -5411,9 +5442,16 @@ releaseFrameNav() {
     return Array.isArray(this.state.exportSettings.extensions) ? this.state.exportSettings.extensions.slice() : [];
   },
 
+  activeExtensionIds() {
+    const items = this._extItems;
+    if (!items || !items.length) return this.enabledExtensionIds();
+    const installed = new Set(items.filter((i) => i.installed).map((i) => i.id));
+    return this.enabledExtensionIds().filter((id) => installed.has(id));
+  },
+
   exportTools() {
     const opts = this.state.exportSettings.extensionOptions || {};
-    return this.enabledExtensionIds().map((id) => ({ id, options: Object.assign({}, opts[id]) }));
+    return this.activeExtensionIds().map((id) => ({ id, options: Object.assign({}, opts[id]) }));
   },
 
   extensionOptionsFor(id) {
@@ -5771,6 +5809,7 @@ releaseFrameNav() {
     if (this.video && !this.video.paused) this.pause();
     this.setStatus('Exporting project…', true);
     this.setProgress(0);
+    this.prepareExportModal();
     $('export-modal').classList.remove('hidden');
     this.closeFind();
     $('export-cancel').style.display = '';
@@ -5779,12 +5818,33 @@ releaseFrameNav() {
     const statusEl = $('export-modal-status');
     $('export-modal-bar').querySelectorAll('.modal-tick').forEach((el) => el.remove());
     const clamp = (v) => Math.max(0, Math.min(1, v));
-    const extIds = this.enabledExtensionIds();
+    const extIds = this.activeExtensionIds();
     const stageNames = ['join', ...extIds.map((id) => 'tool:' + id)];
     if (compressOpts) stageNames.push('compress');
     const stageIndex = (n) => stageNames.indexOf(n);
+    const exportFill = $('export-modal-fill');
+    const setIndeterminate = (on) => {
+      if (!exportFill) return;
+      exportFill.classList.toggle('indeterminate', on);
+      if (on) exportFill.style.width = '';
+    };
     let lastOverall = 0;
     const unsub = window.keycut.onExportProgress((p) => {
+      if (p.phase === 'error') {
+        setIndeterminate(false);
+        this.setStatus(p.message === 'Cancelled' ? 'Export cancelled' : ('Export failed: ' + p.message));
+        statusEl.textContent = p.message === 'Cancelled' ? 'Cancelled' : ('Error: ' + p.message);
+        return;
+      }
+      if (p.phase === 'tool') {
+        const si = Math.max(0, stageIndex('tool:' + p.id));
+        lastOverall = Math.max(lastOverall, si / stageNames.length);
+        this.setProgress(lastOverall);
+        setIndeterminate(true);
+        statusEl.textContent = (p.label || 'Processing') + (p.detail ? ' · ' + p.detail : '') + '...';
+        return;
+      }
+      setIndeterminate(false);
       let stage = null;
       let local = 0;
       let label = '';
@@ -5792,18 +5852,10 @@ releaseFrameNav() {
         stage = 'join';
         local = clamp(p.progress != null ? p.progress : 0);
         label = 'Joining files...';
-      } else if (p.phase === 'tool') {
-        stage = 'tool:' + p.id;
-        local = clamp(p.progress != null ? p.progress : 0);
-        label = (p.label || 'Processing') + '...';
       } else if (p.phase === 'compress') {
         stage = 'compress';
         local = clamp(p.progress != null ? p.progress : 0);
         label = 'Compressing...';
-      } else if (p.phase === 'error') {
-        this.setStatus(p.message === 'Cancelled' ? 'Export cancelled' : ('Export failed: ' + p.message));
-        statusEl.textContent = p.message === 'Cancelled' ? 'Cancelled' : ('Error: ' + p.message);
-        return;
       } else {
         return;
       }
@@ -5831,18 +5883,20 @@ releaseFrameNav() {
       tools: this.exportTools()
     });
     unsub();
+    setIndeterminate(false);
     this.state.exporting = false;
     this._exportCancelled = false;
     $('btn-export').disabled = false;
     this.syncExportButton();
     this.setProgress(null);
     this.setStatus('', false);
-    $('export-modal').classList.add('hidden');
     if (!res || !res.ok) {
+      $('export-modal').classList.add('hidden');
       if (res && res.error === 'Cancelled') this.setStatus('Export cancelled');
       else this.setStatus('Export failed: ' + (res && res.error ? res.error : 'unknown error'));
     } else {
       this.setStatus('Project exported: ' + outputPath);
+      this.showExportDone(outputPath);
     }
   },
 
@@ -6080,6 +6134,7 @@ releaseFrameNav() {
     if (this.video && !this.video.paused) this.pause();
     this.setStatus('Exporting…', true);
     this.setProgress(0);
+    this.prepareExportModal();
     $('export-modal').classList.remove('hidden');
     this.closeFind();
     $('export-modal-title').textContent = 'Export' + (multi ? ' [1/' + jobs.length + ']' : '');
@@ -6103,14 +6158,36 @@ releaseFrameNav() {
       }
     };
     setTicks();
-    const extIds = this.enabledExtensionIds();
+    const extIds = this.activeExtensionIds();
     const stageNames = ['mux', ...extIds.map((id) => 'tool:' + id)];
     if (compressOpts) stageNames.push('encode');
     const stageIndex = (n) => stageNames.indexOf(n);
     const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const exportFill = $('export-modal-fill');
+    const setIndeterminate = (on) => {
+      if (!exportFill) return;
+      exportFill.classList.toggle('indeterminate', on);
+      if (on) exportFill.style.width = '';
+    };
     let lastOverall = 0;
     const unsub = window.keycut.onExportProgress((p) => {
       const base = multiSpan < 1 ? curJob * multiSpan : 0;
+      if (p.phase === 'error') {
+        setIndeterminate(false);
+        this.setStatus('Export failed: ' + p.message);
+        this.setProgress(null);
+        setModalStatus('Error: ' + p.message);
+        return;
+      }
+      if (p.phase === 'tool') {
+        const si = Math.max(0, stageIndex('tool:' + p.id));
+        lastOverall = Math.max(lastOverall, base + multiSpan * (si / stageNames.length));
+        this.setProgress(lastOverall);
+        setIndeterminate(true);
+        setModalStatus((p.label || 'Processing') + (p.detail ? ' · ' + p.detail : '') + '…');
+        return;
+      }
+      setIndeterminate(false);
       let stage = null;
       let local = 0;
       let label = 'Muxing…';
@@ -6122,19 +6199,10 @@ releaseFrameNav() {
         stage = 'mux';
         local = 1;
         label = 'Muxing…';
-      } else if (p.phase === 'tool') {
-        stage = 'tool:' + p.id;
-        local = clamp01(p.progress != null ? p.progress : 0);
-        label = (p.label || 'Processing') + '…';
       } else if (p.phase === 'encode') {
         stage = 'encode';
         local = clamp01(p.progress != null ? p.progress : 0);
         label = 'Encoding…';
-      } else if (p.phase === 'error') {
-        this.setStatus('Export failed: ' + p.message);
-        this.setProgress(null);
-        setModalStatus('Error: ' + p.message);
-        return;
       } else {
         return;
       }
@@ -6174,6 +6242,7 @@ releaseFrameNav() {
     }
 
     unsub();
+    setIndeterminate(false);
     $('export-modal-bar').querySelectorAll('.modal-tick').forEach((el) => el.remove());
     this.state.exporting = false;
     this._exportCancelled = false;
@@ -6181,14 +6250,14 @@ releaseFrameNav() {
     this.syncExportButton();
     this.setProgress(null);
     this.setStatus('', false);
-    $('export-modal').classList.add('hidden');
 
     if (ok) {
       this.setStatus(multi ? 'Export parts complete: ' + jobs.length + ' files' : 'Export complete: ' + jobs[0].out);
-    } else if (lastErr === 'Cancelled') {
-      this.setStatus('Export cancelled');
+      this.showExportDone(multi ? jobs.length + ' files exported' : (jobs[0] && jobs[0].out ? jobs[0].out : ''));
     } else {
-      this.setStatus('Export failed: ' + lastErr);
+      $('export-modal').classList.add('hidden');
+      if (lastErr === 'Cancelled') this.setStatus('Export cancelled');
+      else this.setStatus('Export failed: ' + lastErr);
     }
   },
 

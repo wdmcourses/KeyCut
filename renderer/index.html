@@ -145,8 +145,20 @@
         <div id="export-modal-status" class="modal-text">Preparing…</div>
       </div>
       <div id="export-modal-bar" class="progress-track"><div id="export-modal-fill" class="progress-fill"></div></div>
+      <div id="export-done" class="export-done hidden">
+        <div class="success-row">
+          <span class="success-icon">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+          </span>
+          <div class="success-body">
+            <div class="success-title">All operations completed</div>
+            <div id="export-done-detail" class="success-detail hidden"></div>
+          </div>
+        </div>
+      </div>
       <div class="btn-group btn-group--end">
         <button id="export-cancel" class="btn btn--sm btn--danger" style="display:none" title="Cancel Export">Cancel</button>
+        <button id="export-done-close" class="btn btn--sm" style="display:none" title="Close (Enter)">Close</button>
       </div>
     </div>
   </div>
