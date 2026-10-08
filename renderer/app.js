@@ -5480,7 +5480,7 @@ releaseFrameNav() {
         if (it.options && it.options.length) box.appendChild(this.buildExtensionOptions(it));
       } else {
         const head = document.createElement('div');
-        head.className = 'switch-row ext-head';
+        head.className = 'switch-row ext-head ext-head--action';
         const label = document.createElement('span');
         label.className = 'switch-label';
         label.textContent = it.label;

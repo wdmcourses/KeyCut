@@ -75,6 +75,7 @@ app.whenReady().then(async () => {
   await js('window.__app.openExportSettings()');
   await js("window.__app.switchExportTab('additional')");
   await new Promise((r) => setTimeout(r, 400));
+  await js("(() => { const s = document.createElement('style'); s.textContent = '#export-extra-list .ext-options { transition: none !important; }'; document.head.appendChild(s); })()");
   const ui = await js(`(() => {
     const box = document.querySelector('#export-extra-list .ext-item');
     return {
@@ -96,6 +97,29 @@ app.whenReady().then(async () => {
   check('options panel closed while off', ui.open === false);
   check('disabled by default', ui.enabled.length === 0);
 
+  const hit = await js(`(() => {
+    const box = document.querySelector('#export-extra-list .ext-item');
+    const head = box.querySelector('.ext-head');
+    const br = box.getBoundingClientRect();
+    const hr = head.getBoundingClientRect();
+    const topEl = document.elementFromPoint(br.left + br.width / 2, br.top + 2);
+    const bottomEl = document.elementFromPoint(br.left + br.width / 2, br.bottom - 2);
+    return {
+      boxPad: getComputedStyle(box).paddingTop,
+      fillsTop: Math.abs(hr.top - br.top) < 1.5,
+      fillsBottom: Math.abs(hr.bottom - br.bottom) < 1.5,
+      fillsWidth: Math.abs(hr.width - box.clientWidth) < 1.5,
+      isLabel: head.tagName === 'LABEL',
+      topHitsHead: head.contains(topEl),
+      bottomHitsHead: head.contains(bottomEl)
+    };
+  })()`);
+  check('wrapper has no padding', hit.boxPad === '0px', JSON.stringify(hit));
+  check('head fills wrapper vertically', hit.fillsTop && hit.fillsBottom && hit.fillsWidth, JSON.stringify(hit));
+  check('head is the switch label', hit.isLabel === true);
+  check('top padding area is clickable', hit.topHitsHead === true, JSON.stringify(hit));
+  check('bottom padding area is clickable', hit.bottomHitsHead === true, JSON.stringify(hit));
+
   await js(`document.querySelector('#export-extra-list .ext-item .switch input').click()`);
   await new Promise((r) => setTimeout(r, 120));
   const on = await js(`(() => {
@@ -104,6 +128,27 @@ app.whenReady().then(async () => {
   })()`);
   check('enabling opens options panel', on.open === true && on.maxH === '220px', JSON.stringify(on));
   check('enabled id stored', JSON.stringify(on.enabled) === JSON.stringify(['lossless-debreath']));
+
+  const expanded = await js(`(() => {
+    const box = document.querySelector('#export-extra-list .ext-item');
+    const head = box.querySelector('.ext-head');
+    const opts = box.querySelector('.ext-options');
+    const hr = head.getBoundingClientRect();
+    const or = opts.getBoundingClientRect();
+    const br = box.getBoundingClientRect();
+    const firstChoice = box.querySelector('.ext-opt-choice');
+    const cr = firstChoice.getBoundingClientRect();
+    const atChoice = document.elementFromPoint(cr.left + cr.width / 2, cr.top + cr.height / 2);
+    return {
+      optsVisible: or.height > 20 && getComputedStyle(opts).opacity === '1',
+      optsBelowHead: or.top >= hr.bottom - 0.5,
+      headStopsBeforeBox: hr.bottom < br.bottom - 1,
+      choiceHitsChoice: atChoice === firstChoice
+    };
+  })()`);
+  check('options panel expanded below the head', expanded.optsVisible && expanded.optsBelowHead, JSON.stringify(expanded));
+  check('head does not cover options', expanded.headStopsBeforeBox === true, JSON.stringify(expanded));
+  check('option buttons remain clickable', expanded.choiceHitsChoice === true, JSON.stringify(expanded));
 
   await js(`(() => { for (const b of document.querySelectorAll('#export-extra-list .ext-opt-choice')) if (b.dataset.val === '45') b.click(); })()`);
   await new Promise((r) => setTimeout(r, 80));
@@ -126,10 +171,25 @@ app.whenReady().then(async () => {
   const ui2 = await js(`(() => {
     const box = document.querySelector('#export-extra-list .ext-item');
     const btn = box.querySelector('.btn--download');
-    return { hasSwitch: !!box.querySelector('.switch input'), hasDownload: !!btn, text: btn ? btn.textContent : null };
+    const head = box.querySelector('.ext-head');
+    const hr = head.getBoundingClientRect();
+    const br = box.getBoundingClientRect();
+    const topEl = document.elementFromPoint(br.left + br.width / 2, br.top + 2);
+    return {
+      hasSwitch: !!box.querySelector('.switch input'),
+      hasDownload: !!btn,
+      text: btn ? btn.textContent : null,
+      headCursor: getComputedStyle(head).cursor,
+      btnCursor: getComputedStyle(btn).cursor,
+      headIsDiv: head.tagName === 'DIV',
+      headFills: Math.abs(hr.top - br.top) < 1.5 && Math.abs(hr.bottom - br.bottom) < 1.5,
+      topHitsHead: head.contains(topEl)
+    };
   })()`);
   check('download button shown', ui2.hasDownload && !ui2.hasSwitch, JSON.stringify(ui2));
   check('download label', ui2.text === 'Download', ui2.text);
+  check('download row not a dead pointer', ui2.headIsDiv && ui2.headCursor === 'default' && ui2.btnCursor === 'pointer', JSON.stringify(ui2));
+  check('download row still fills wrapper', ui2.headFills && ui2.topHitsHead, JSON.stringify(ui2));
 
   console.log('[7] project persistence (ext/extopt round-trip)');
   const projPath = path.join(WORK, 'p.kc');

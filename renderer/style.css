@@ -1256,9 +1256,13 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
 }
 .success-detail.hidden { display: none; }
 
-.ext-item { display: flex; flex-direction: column; }
+.ext-item { display: flex; flex-direction: column; padding: 0; }
 .ext-head { cursor: pointer; }
+.ext-head--action { cursor: default; }
+.ext-head--action .btn { cursor: pointer; }
+.ext-item .ext-head { padding: 8px 12px; }
 .ext-options {
+  padding: 0 12px;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
@@ -1268,7 +1272,8 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
 .ext-item.open .ext-options {
   max-height: 220px;
   opacity: 1;
-  margin-top: 10px;
+  margin-top: 2px;
+  padding: 0 12px 8px;
 }
 .ext-opt-label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
 .ext-opt-row { display: flex; gap: 6px; }
