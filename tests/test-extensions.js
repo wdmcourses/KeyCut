@@ -35,7 +35,7 @@ app.whenReady().then(async () => {
   check('lists one extension', list.length === 1 && list[0].id === 'lossless-debreath', JSON.stringify(list));
   check('installed true', list[0].installed === true);
   check('available true', list[0].available === true);
-  check('option schema exposed', list[0].options.length === 1 && list[0].options[0].key === 'gain' && list[0].options[0].choices.join() === '15,30,45,60' && list[0].options[0].default === 30, JSON.stringify(list[0].options));
+  check('option schema exposed', list[0].options.length === 1 && list[0].options[0].key === 'gain' && list[0].options[0].choices.join() === '20,40,60,80,100' && list[0].options[0].default === 60, JSON.stringify(list[0].options));
 
   console.log('[2] resolveTools builds cmd/env/args from options');
   const tools = resolveTools(FAKE_ROOT, [{ id: 'lossless-debreath', options: { gain: 45 } }]);
@@ -46,9 +46,9 @@ app.whenReady().then(async () => {
   check('env unbuffers stdout for live progress', tools[0].env && tools[0].env.PYTHONUNBUFFERED === '1');
   check('args carry gain (-l 45)', JSON.stringify(tools[0].args) === JSON.stringify(['-l', '45']), JSON.stringify(tools[0].args));
   const dflt = resolveTools(FAKE_ROOT, [{ id: 'lossless-debreath', options: {} }]);
-  check('default gain 30', JSON.stringify(dflt[0].args) === JSON.stringify(['-l', '30']), JSON.stringify(dflt[0].args));
+  check('default gain 60', JSON.stringify(dflt[0].args) === JSON.stringify(['-l', '60']), JSON.stringify(dflt[0].args));
   const legacy = resolveTools(FAKE_ROOT, ['lossless-debreath']);
-  check('legacy id-only form works', legacy.length === 1 && JSON.stringify(legacy[0].args) === JSON.stringify(['-l', '30']));
+  check('legacy id-only form works', legacy.length === 1 && JSON.stringify(legacy[0].args) === JSON.stringify(['-l', '60']));
 
   console.log('[3] registry (not installed)');
   uninstallFake();
@@ -92,8 +92,8 @@ app.whenReady().then(async () => {
   check('additional tab active', ui.activeTab === 'additional');
   check('switch shown, no download', ui.hasSwitch && !ui.hasDownload, JSON.stringify(ui));
   check('label correct', ui.label === 'Lossless DeBreath');
-  check('four gain choices with unit', JSON.stringify(ui.choices) === JSON.stringify(['15 dB', '30 dB', '45 dB', '60 dB']), JSON.stringify(ui.choices));
-  check('default 30 active', ui.active === '30 dB');
+  check('five gain choices with unit', JSON.stringify(ui.choices) === JSON.stringify(['20 dB', '40 dB', '60 dB', '80 dB', '100 dB']), JSON.stringify(ui.choices));
+  check('default 60 active', ui.active === '60 dB');
   check('options panel closed while off', ui.open === false);
   check('disabled by default', ui.enabled.length === 0);
 
@@ -150,15 +150,15 @@ app.whenReady().then(async () => {
   check('head does not cover options', expanded.headStopsBeforeBox === true, JSON.stringify(expanded));
   check('option buttons remain clickable', expanded.choiceHitsChoice === true, JSON.stringify(expanded));
 
-  await js(`(() => { for (const b of document.querySelectorAll('#export-extra-list .ext-opt-choice')) if (b.dataset.val === '45') b.click(); })()`);
+  await js(`(() => { for (const b of document.querySelectorAll('#export-extra-list .ext-opt-choice')) if (b.dataset.val === '80') b.click(); })()`);
   await new Promise((r) => setTimeout(r, 80));
   const chosen = await js(`(() => {
     const box = document.querySelector('#export-extra-list .ext-item');
     return { active: box.querySelector('.ext-opt-choice.btn--primary').textContent, opts: window.__app.state.exportSettings.extensionOptions, tools: window.__app.exportTools() };
   })()`);
-  check('choice 45 becomes active', chosen.active === '45 dB');
-  check('option persisted in state', chosen.opts && chosen.opts['lossless-debreath'] && chosen.opts['lossless-debreath'].gain === 45, JSON.stringify(chosen.opts));
-  check('exportTools carries options', chosen.tools.length === 1 && chosen.tools[0].id === 'lossless-debreath' && chosen.tools[0].options.gain === 45, JSON.stringify(chosen.tools));
+  check('choice 80 becomes active', chosen.active === '80 dB');
+  check('option persisted in state', chosen.opts && chosen.opts['lossless-debreath'] && chosen.opts['lossless-debreath'].gain === 80, JSON.stringify(chosen.opts));
+  check('exportTools carries options', chosen.tools.length === 1 && chosen.tools[0].id === 'lossless-debreath' && chosen.tools[0].options.gain === 80, JSON.stringify(chosen.tools));
 
   await js("window.__app.state.exportSettings.extensions = ['lossless-debreath', 'ghost']");
   const active = await js('window.__app.activeExtensionIds()');
@@ -196,15 +196,15 @@ app.whenReady().then(async () => {
   const tl = { id: 1, name: 'a.mp4', src: 'C:/x/a.mp4', video: { dur: 3, w: 320, h: 180, fps: 25, size: 1 }, cursor: 0, zoom: 0, viewStart: 0, cuts: [0, 3], deleted: [], markers: [], keyTimes: [], streams: [], pcmAudio: false, videoTimebase: null, hasThumbnail: false, compatNeeded: false };
   await saveProject(projPath, {
     activeId: 1,
-    exportSettings: { compress: false, resolution: 'origin', quality: 'low', blocks: false, gpu: true, extensions: ['lossless-debreath'], extensionOptions: { 'lossless-debreath': { gain: 45 } } },
+    exportSettings: { compress: false, resolution: 'origin', quality: 'low', blocks: false, gpu: true, extensions: ['lossless-debreath'], extensionOptions: { 'lossless-debreath': { gain: 80 } } },
     timelines: [tl]
   });
   const raw = fs.readFileSync(projPath, 'utf8');
   check('project writes ext attribute', /ext="lossless-debreath"/.test(raw));
-  check('project writes extopt attribute', /extopt="lossless-debreath\.gain=45"/.test(raw));
+  check('project writes extopt attribute', /extopt="lossless-debreath\.gain=80"/.test(raw));
   const loaded = await loadProject(projPath);
   check('project restores extensions', JSON.stringify(loaded.exportSettings.extensions) === JSON.stringify(['lossless-debreath']));
-  check('project restores option value as number', loaded.exportSettings.extensionOptions['lossless-debreath'].gain === 45);
+  check('project restores option value as number', loaded.exportSettings.extensionOptions['lossless-debreath'].gain === 80);
   const legacyPath = path.join(WORK, 'legacy.kc');
   fs.writeFileSync(legacyPath, '<?xml version="1.0" encoding="UTF-8"?>\n<keycut ver="2">\n  <export compress="0" res="origin" q="low" blocks="0" gpu="1"/>\n  <timelines active="1">\n    <timeline id="1" name="a.mp4">\n      <src rel="a.mp4">a.mp4</src>\n      <video dur="3.000000" w="320" h="180" fps="25.000000" size="1"/>\n      <view cursor="0.000000" zoom="0.000000" start="0.000000"/>\n      <cuts><c t="0.000000"/><c t="3.000000"/></cuts>\n      <markers></markers>\n    </timeline>\n  </timelines>\n</keycut>', 'utf8');
   const legacyProj = await loadProject(legacyPath);
