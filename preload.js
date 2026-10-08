@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('keycut', {
   saveExportDialog: (defaultName, compress, allowedExts) => ipcRenderer.invoke('dialog:saveExport', defaultName, compress, allowedExts),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
   getFilePath: (file) => webUtils.getPathForFile(file),
+  collectPaths: (paths) => ipcRenderer.invoke('paths:collect', paths),
 
   probeVideo: (filePath) => ipcRenderer.invoke('probe:video', filePath),
   probeQuick: (p) => ipcRenderer.invoke('probe:quick', p),

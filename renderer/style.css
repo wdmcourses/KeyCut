@@ -1446,7 +1446,7 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
 #scrub-audio { display: none; }
 
 body.drag-over::after {
-  content: 'Drop file to open';
+  content: 'Drop files or folders';
   position: fixed;
   inset: 0;
   background: var(--drag-overlay);

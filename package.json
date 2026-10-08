@@ -23,7 +23,8 @@
     "test:ext": "electron tests/test-extensions.js",
     "test:archive": "node tests/test-archive.js",
     "test:tools": "node tests/test-export-tools.js",
-    "test:all": "npm run test && npm run test:keys && npm run test:scroll && npm run test:missing && npm run test:history && npm run test:panel && npm run test:runs && npm run test:export && npm run test:compress && npm run test:compat && npm run test:mute && npm run test:src && npm run test:archive && npm run test:tools && npm run test:ext"
+    "test:folder": "electron tests/test-folder.js",
+    "test:all": "npm run test && npm run test:keys && npm run test:scroll && npm run test:missing && npm run test:history && npm run test:panel && npm run test:runs && npm run test:export && npm run test:compress && npm run test:compat && npm run test:mute && npm run test:src && npm run test:archive && npm run test:tools && npm run test:folder && npm run test:ext"
   },
   "author": "KeyCut",
   "license": "MIT",

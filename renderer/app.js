@@ -2318,60 +2318,44 @@ const app = {
       if (dragDepth === 0) clearDragOver();
     });
     window.addEventListener('blur', clearDragOver);
-    window.addEventListener('drop', (e) => {
+    window.addEventListener('drop', async (e) => {
       e.preventDefault();
       clearDragOver();
       const dt = e.dataTransfer;
       if (!dt || !dt.files || !dt.files.length) return;
       if (this.isFileOpBusy()) { this.setStatus('Busy: an operation is in progress'); return; }
-      const cm = $('concat-modal');
-      const panel = $('timelines-panel');
-      const concatOpen = cm && !cm.classList.contains('hidden');
-      const panelOpen = panel && !panel.classList.contains('hidden');
-      const inProject = !!(this.state.projectPath || (this.state.timelines || []).length);
-      if (concatOpen) {
-        const paths = [];
-        for (const f of dt.files) {
-          const p = window.keycut.getFilePath ? window.keycut.getFilePath(f) : null;
-          if (p) paths.push(p);
-        }
-        if (paths.length && !this._concatBusy) this.concatAddPaths(paths);
-        return;
-      }
-      if (panelOpen || inProject) {
-        const paths = [];
-        let kcPath = null;
-        for (const f of dt.files) {
-          const p = window.keycut.getFilePath ? window.keycut.getFilePath(f) : null;
-          if (!p) continue;
-          if (/\.kc$/i.test(p)) { kcPath = p; continue; }
-          if (isVideoFile(p)) paths.push(p);
-        }
-        if (kcPath && !paths.length) { this.handleDroppedFile(kcPath); return; }
-        if (paths.length) {
-          this.tlAddPaths(paths);
-          this.setStatus('Added ' + paths.length + ' timeline' + (paths.length > 1 ? 's' : '') + ' to the project');
-          return;
-        }
-        if (dt.files.length) this.setStatus('Unsupported file type');
-        return;
-      }
-      const paths = [];
-      let kcPath = null;
+      const rawPaths = [];
       for (const f of dt.files) {
         const p = window.keycut.getFilePath ? window.keycut.getFilePath(f) : null;
-        if (!p) continue;
-        if (/\.kc$/i.test(p)) { kcPath = p; continue; }
-        if (isVideoFile(p)) paths.push(p);
+        if (p) rawPaths.push(p);
       }
-      if (paths.length) {
-        this.tlAddPaths(paths);
-        this.setStatus('Added ' + paths.length + ' timeline' + (paths.length > 1 ? 's' : '') + ' to the editor');
-        return;
-      }
-      if (kcPath) { this.handleDroppedFile(kcPath); return; }
-      if (dt.files.length) this.setStatus('Unsupported file type');
+      if (!rawPaths.length) { this.setStatus('Unsupported file type'); return; }
+      let collected = { videos: [], projects: [], folders: [] };
+      try { collected = await window.keycut.collectPaths(rawPaths); } catch {}
+      await this.handleCollectedPaths(collected || {});
     });
+  },
+
+  async handleCollectedPaths(collected) {
+    const videos = (collected && collected.videos) || [];
+    const projects = (collected && collected.projects) || [];
+    const folders = (collected && collected.folders) || [];
+    const cm = $('concat-modal');
+    const concatOpen = cm && !cm.classList.contains('hidden');
+    if (concatOpen) {
+      if (videos.length && !this._concatBusy) this.concatAddPaths(videos);
+      return;
+    }
+    if (videos.length) {
+      await this.tlAddPaths(videos);
+      if (folders.length) this.toggleTimelinesPanel(true);
+      const from = folders.length ? ' from folder' + (folders.length > 1 ? 's' : '') : '';
+      this.setStatus('Added ' + videos.length + ' timeline' + (videos.length > 1 ? 's' : '') + from);
+      return;
+    }
+    if (projects.length) { await this.handleDroppedFile(projects[0]); return; }
+    if (folders.length) { this.setStatus('No editable files found in the dropped folder'); return; }
+    this.setStatus('Unsupported file type');
   },
 
   async handleDroppedFile(p) {
