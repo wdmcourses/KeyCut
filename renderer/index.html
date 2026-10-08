@@ -154,52 +154,64 @@
   <div id="export-settings-modal" class="modal hidden">
     <div id="export-settings-card" class="modal-card">
       <div id="export-settings-title" class="modal-title">Export Project</div>
-      <label class="switch-row switch-box" id="export-blocks-row">
-        <span class="switch-label">Export marker segments separately</span>
-        <span class="switch">
-          <input type="checkbox" id="export-blocks-separate" />
-          <span class="switch-track"><span class="switch-knob"></span></span>
-        </span>
-      </label>
-      <div id="export-join-row" class="export-join hidden">
-        <label class="switch-row switch-box" id="export-join-label-row">
-          <span class="switch-label">Join all timelines into one video</span>
-          <span class="switch">
-            <input type="checkbox" id="export-join-toggle" />
-            <span class="switch-track"><span class="switch-knob"></span></span>
-          </span>
-        </label>
-        <div id="export-join-reason" class="export-join-reason hidden"></div>
+      <div id="export-settings-tabs" class="tabs" role="tablist">
+        <button class="tab active" type="button" role="tab" data-tab="primary">Primary</button>
+        <button class="tab" type="button" role="tab" data-tab="additional">Additional</button>
       </div>
-      <div id="export-segment-range" class="export-segment-range hidden">
-        <span class="esr-label">Export from</span>
-        <span class="esr-time" id="export-segment-from">00:00:00.000</span>
-        <span class="esr-label">to</span>
-        <span class="esr-time" id="export-segment-to">00:00:00.000</span>
-      </div>
-      <div class="export-compress">
-        <button id="export-compress-toggle" class="btn btn--xs" title="Compress the export to reduce file size">Compress: OFF</button>
-        <div id="export-resolution-row" class="hidden">
-          <span class="res-label">Resolution:</span>
-          <button class="res-opt btn btn--xs btn--primary" data-res="origin">Origin</button>
-          <button class="res-opt btn btn--xs" data-res="720">720p</button>
-          <button class="res-opt btn btn--xs" data-res="1080">1080p</button>
-          <button class="res-opt btn btn--xs" data-res="1440">1440p</button>
-          <button class="res-opt btn btn--xs" data-res="2160">2160p</button>
+      <div class="tab-panels">
+        <div class="tab-panel" data-tab="primary">
+          <label class="switch-row switch-box" id="export-blocks-row">
+            <span class="switch-label">Export marker segments separately</span>
+            <span class="switch">
+              <input type="checkbox" id="export-blocks-separate" />
+              <span class="switch-track"><span class="switch-knob"></span></span>
+            </span>
+          </label>
+          <div id="export-join-row" class="export-join hidden">
+            <label class="switch-row switch-box" id="export-join-label-row">
+              <span class="switch-label">Join all timelines into one video</span>
+              <span class="switch">
+                <input type="checkbox" id="export-join-toggle" />
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </span>
+            </label>
+            <div id="export-join-reason" class="export-join-reason hidden"></div>
+          </div>
+          <div id="export-segment-range" class="export-segment-range hidden">
+            <span class="esr-label">Export from</span>
+            <span class="esr-time" id="export-segment-from">00:00:00.000</span>
+            <span class="esr-label">to</span>
+            <span class="esr-time" id="export-segment-to">00:00:00.000</span>
+          </div>
+          <div class="export-compress">
+            <button id="export-compress-toggle" class="btn btn--xs" title="Compress the export to reduce file size">Compress: OFF</button>
+            <div id="export-resolution-row" class="hidden">
+              <span class="res-label">Resolution:</span>
+              <button class="res-opt btn btn--xs btn--primary" data-res="origin">Origin</button>
+              <button class="res-opt btn btn--xs" data-res="720">720p</button>
+              <button class="res-opt btn btn--xs" data-res="1080">1080p</button>
+              <button class="res-opt btn btn--xs" data-res="1440">1440p</button>
+              <button class="res-opt btn btn--xs" data-res="2160">2160p</button>
+            </div>
+            <div id="export-quality-row" class="export-quality-row hidden">
+              <span class="quality-label">Quality:</span>
+              <button class="quality-opt btn btn--xs btn--primary" data-quality="low">Low</button>
+              <button class="quality-opt btn btn--xs" data-quality="mid">Mid</button>
+              <button class="quality-opt btn btn--xs" data-quality="high">High</button>
+            </div>
+            <label class="switch-row switch-box" id="export-gpu-row">
+              <span class="switch-label">Use GPU acceleration for export</span>
+              <span class="switch">
+                <input type="checkbox" id="export-gpu-toggle" checked />
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </span>
+            </label>
+          </div>
         </div>
-        <div id="export-quality-row" class="export-quality-row hidden">
-          <span class="quality-label">Quality:</span>
-          <button class="quality-opt btn btn--xs btn--primary" data-quality="low">Low</button>
-          <button class="quality-opt btn btn--xs" data-quality="mid">Mid</button>
-          <button class="quality-opt btn btn--xs" data-quality="high">High</button>
+        <div class="tab-panel hidden" data-tab="additional">
+          <div id="export-extra-list" class="export-extra-list"></div>
+          <div id="export-extra-empty" class="export-extra-empty hidden">No additional tools available.</div>
         </div>
-        <label class="switch-row switch-box" id="export-gpu-row">
-          <span class="switch-label">Use GPU acceleration for export</span>
-          <span class="switch">
-            <input type="checkbox" id="export-gpu-toggle" checked />
-            <span class="switch-track"><span class="switch-knob"></span></span>
-          </span>
-        </label>
       </div>
       <div class="btn-group btn-group--end">
         <button id="export-settings-cancel" class="btn btn--sm btn--danger" title="Cancel (Esc)">Cancel</button>

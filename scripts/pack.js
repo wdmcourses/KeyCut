@@ -121,6 +121,14 @@ async function ffmpegFor(platform) {
   return p;
 }
 
+function copyExtensions(resDir) {
+  const extSrc = path.join(ROOT, 'resources');
+  if (!fs.existsSync(extSrc)) return;
+  for (const e of fs.readdirSync(extSrc)) {
+    copy(path.join(extSrc, e), path.join(resDir, e));
+  }
+}
+
 async function main() {
   const { platform, arch } = target();
   const cfg = PLATFORMS[platform];
@@ -146,6 +154,7 @@ async function main() {
     fs.mkdirSync(path.join(resDir, 'app'), { recursive: true });
     for (const f of APP_FILES) copy(path.join(ROOT, f), path.join(resDir, 'app', f));
     fs.copyFileSync(ffmpeg, path.join(resDir, cfg.ffmpegBin));
+    copyExtensions(resDir);
     fs.writeFileSync(path.join(resDir, 'app', 'portable.txt'), 'KeyCut portable build\n');
 
     
@@ -167,6 +176,7 @@ async function main() {
     fs.mkdirSync(path.join(resDir, 'app'), { recursive: true });
     for (const f of APP_FILES) copy(path.join(ROOT, f), path.join(resDir, 'app', f));
     fs.copyFileSync(ffmpeg, path.join(resDir, cfg.ffmpegBin));
+    copyExtensions(resDir);
     fs.writeFileSync(path.join(resDir, 'app', 'portable.txt'), 'KeyCut portable build\n');
 
     const exe = path.join(DIST, cfg.bin);

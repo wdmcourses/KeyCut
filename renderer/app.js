@@ -2058,7 +2058,9 @@ const app = {
       resolution: 'origin',
       quality: 'low',
       blocks: false,
-      gpu: true
+      gpu: true,
+      extensions: [],
+      extensionOptions: {}
     },
     _exportMode: 'project',
     _segmentMarkerId: null
@@ -3116,6 +3118,10 @@ const app = {
     $('export-cancel').addEventListener('click', () => this.cancelExport());
     $('export-settings-cancel').addEventListener('click', () => this.closeExportSettings());
     $('export-settings-action').addEventListener('click', () => this.doExport());
+    $('export-settings-tabs').addEventListener('click', (e) => {
+      const tab = e.target.closest('.tab');
+      if (tab) this.switchExportTab(tab.dataset.tab);
+    });
     $('export-join-toggle').addEventListener('change', () => {
       this._exportJoin = $('export-join-toggle').checked;
     });
@@ -5092,7 +5098,9 @@ releaseFrameNav() {
         resolution: data.exportSettings.resolution || 'origin',
         quality: data.exportSettings.quality || 'low',
         blocks: !!data.exportSettings.blocks,
-        gpu: data.exportSettings.gpu !== false
+        gpu: data.exportSettings.gpu !== false,
+        extensions: Array.isArray(data.exportSettings.extensions) ? data.exportSettings.extensions.slice() : [],
+        extensionOptions: Object.assign({}, data.exportSettings.extensionOptions)
       };
     }
 
@@ -5164,7 +5172,7 @@ releaseFrameNav() {
     this.state.activeTimelineId = null;
     this.state.projectPath = null;
     this._tlSeq = 0;
-    this.state.exportSettings = { compress: false, resolution: 'origin', quality: 'low', blocks: false, gpu: true };
+    this.state.exportSettings = { compress: false, resolution: 'origin', quality: 'low', blocks: false, gpu: true, extensions: [], extensionOptions: {} };
     this.state.waveform.slices.clear();
     this.state.waveform.pending.clear();
     this._skipFitWindow = false;
@@ -5277,9 +5285,29 @@ releaseFrameNav() {
   openExportSettings() {
     $('export-settings-modal').classList.remove('hidden');
     $('export-segment-range').classList.toggle('hidden', this._exportMode !== 'segment');
+    this.syncExportAdditionalUI();
+    this.switchExportTab('primary', true);
     const esCard = $('export-settings-card');
-    const esTop = Math.max(12, Math.round((window.innerHeight - esCard.offsetHeight) / 2));
-    esCard.style.marginTop = esTop + 'px';
+    if (esCard) {
+      const esTop = Math.max(12, Math.round((window.innerHeight - esCard.offsetHeight) / 2));
+      esCard.style.marginTop = esTop + 'px';
+    }
+  },
+
+  switchExportTab(name, lockHeight) {
+    const tabs = $('export-settings-tabs');
+    if (!tabs) return;
+    for (const b of tabs.querySelectorAll('.tab')) {
+      b.classList.toggle('active', b.dataset.tab === name);
+    }
+    const panels = [...document.querySelectorAll('#export-settings-card .tab-panel')];
+    for (const p of panels) p.classList.toggle('hidden', p.dataset.tab !== name);
+    const holder = document.querySelector('#export-settings-card .tab-panels');
+    if (holder && lockHeight) {
+      holder.style.minHeight = '';
+      const active = panels.find((p) => p.dataset.tab === name);
+      if (active) holder.style.minHeight = active.offsetHeight + 'px';
+    }
   },
 
   showAlert(message, opts) {
@@ -5373,6 +5401,143 @@ releaseFrameNav() {
     const show = isWindowsPlatform() && es.compress;
     $('export-gpu-row').style.display = show ? '' : 'none';
     $('export-gpu-toggle').checked = es.gpu !== false;
+  },
+
+  syncExportAdditionalUI() {
+    this.renderExportExtra();
+  },
+
+  enabledExtensionIds() {
+    return Array.isArray(this.state.exportSettings.extensions) ? this.state.exportSettings.extensions.slice() : [];
+  },
+
+  exportTools() {
+    const opts = this.state.exportSettings.extensionOptions || {};
+    return this.enabledExtensionIds().map((id) => ({ id, options: Object.assign({}, opts[id]) }));
+  },
+
+  extensionOptionsFor(id) {
+    const all = this.state.exportSettings.extensionOptions || {};
+    return Object.assign({}, all[id]);
+  },
+
+  setExtensionOption(id, key, value) {
+    const all = this.state.exportSettings.extensionOptions || (this.state.exportSettings.extensionOptions = {});
+    all[id] = Object.assign({}, all[id]);
+    all[id][key] = value;
+    this.markDirty();
+  },
+
+  async renderExportExtra() {
+    const list = $('export-extra-list');
+    if (!list) return;
+    let items = [];
+    try { items = (await window.keycut.extList()) || []; } catch { items = []; }
+    this._extItems = items;
+    list.innerHTML = '';
+    const empty = $('export-extra-empty');
+    if (empty) empty.classList.toggle('hidden', items.length > 0);
+    const enabled = new Set(this.enabledExtensionIds());
+    for (const it of items) {
+      const box = document.createElement('div');
+      box.className = 'switch-box ext-item' + (enabled.has(it.id) ? ' open' : '');
+      box.dataset.extId = it.id;
+      if (it.installed) {
+        const head = document.createElement('label');
+        head.className = 'switch-row ext-head';
+        head.innerHTML = '<span class="switch-label"></span><span class="switch"><input type="checkbox" /><span class="switch-track"><span class="switch-knob"></span></span></span>';
+        head.querySelector('.switch-label').textContent = it.label;
+        const input = head.querySelector('input');
+        input.checked = enabled.has(it.id);
+        input.addEventListener('change', () => {
+          const on = input.checked;
+          box.classList.toggle('open', on);
+          this.toggleExtension(it.id, on);
+        });
+        box.appendChild(head);
+        if (it.options && it.options.length) box.appendChild(this.buildExtensionOptions(it));
+      } else {
+        const head = document.createElement('div');
+        head.className = 'switch-row ext-head';
+        const label = document.createElement('span');
+        label.className = 'switch-label';
+        label.textContent = it.label;
+        head.appendChild(label);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn--sm btn--download';
+        btn.textContent = it.available === false ? 'Unavailable' : 'Download';
+        btn.disabled = it.available === false;
+        btn.addEventListener('click', () => this.downloadExtension(it.id, btn));
+        head.appendChild(btn);
+        box.appendChild(head);
+      }
+      list.appendChild(box);
+    }
+  },
+
+  buildExtensionOptions(it) {
+    const wrap = document.createElement('div');
+    wrap.className = 'ext-options';
+    const store = this.extensionOptionsFor(it.id);
+    for (const opt of it.options) {
+      if (opt.type !== 'choice') continue;
+      const label = document.createElement('div');
+      label.className = 'ext-opt-label';
+      label.textContent = opt.label + (opt.unit ? ' (' + opt.unit + ')' : '');
+      wrap.appendChild(label);
+      const row = document.createElement('div');
+      row.className = 'ext-opt-row';
+      const current = store[opt.key] != null ? store[opt.key] : opt.default;
+      for (const choice of opt.choices) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn--xs ext-opt-choice' + (String(choice) === String(current) ? ' btn--primary' : '');
+        b.dataset.val = String(choice);
+        b.textContent = String(choice) + (opt.unit ? ' ' + opt.unit : '');
+        b.addEventListener('click', () => {
+          this.setExtensionOption(it.id, opt.key, choice);
+          for (const sib of row.querySelectorAll('.ext-opt-choice')) {
+            sib.classList.toggle('btn--primary', sib.dataset.val === String(choice));
+          }
+        });
+        row.appendChild(b);
+      }
+      wrap.appendChild(row);
+    }
+    return wrap;
+  },
+
+  toggleExtension(id, on) {
+    const set = new Set(this.enabledExtensionIds());
+    if (on) set.add(id); else set.delete(id);
+    this.state.exportSettings.extensions = [...set];
+    this.markDirty();
+  },
+
+  async downloadExtension(id, btn) {
+    if (this._extBusy) return;
+    this._extBusy = true;
+    btn.disabled = true;
+    btn.textContent = 'Downloading…';
+    const unsub = window.keycut.onExtProgress((p) => {
+      if (p && p.id === id && p.progress != null) {
+        btn.textContent = 'Downloading ' + Math.round(p.progress * 100) + '%';
+      }
+    });
+    let res;
+    try { res = await window.keycut.extDownload(id); }
+    catch (err) { res = { ok: false, error: err && err.message }; }
+    unsub();
+    this._extBusy = false;
+    if (!res || !res.ok) {
+      btn.disabled = false;
+      btn.textContent = 'Retry';
+      this.setStatus('Extension install failed: ' + ((res && res.error) || 'unknown error'));
+      return;
+    }
+    this.setStatus('Installed: ' + id);
+    await this.renderExportExtra();
   },
 
   setExportResolution(res) {
@@ -5614,19 +5779,39 @@ releaseFrameNav() {
     const statusEl = $('export-modal-status');
     $('export-modal-bar').querySelectorAll('.modal-tick').forEach((el) => el.remove());
     const clamp = (v) => Math.max(0, Math.min(1, v));
+    const extIds = this.enabledExtensionIds();
+    const stageNames = ['join', ...extIds.map((id) => 'tool:' + id)];
+    if (compressOpts) stageNames.push('compress');
+    const stageIndex = (n) => stageNames.indexOf(n);
+    let lastOverall = 0;
     const unsub = window.keycut.onExportProgress((p) => {
+      let stage = null;
+      let local = 0;
+      let label = '';
       if (p.phase === 'join') {
-        const v = clamp(p.progress != null ? p.progress : 0);
-        statusEl.textContent = 'Joining files... ' + Math.round(v * 100) + '%';
-        this.setProgress(v);
+        stage = 'join';
+        local = clamp(p.progress != null ? p.progress : 0);
+        label = 'Joining files...';
+      } else if (p.phase === 'tool') {
+        stage = 'tool:' + p.id;
+        local = clamp(p.progress != null ? p.progress : 0);
+        label = (p.label || 'Processing') + '...';
       } else if (p.phase === 'compress') {
-        const v = clamp(p.progress != null ? p.progress : 0);
-        statusEl.textContent = 'Compressing... ' + Math.round(v * 100) + '%';
-        this.setProgress(v);
+        stage = 'compress';
+        local = clamp(p.progress != null ? p.progress : 0);
+        label = 'Compressing...';
       } else if (p.phase === 'error') {
         this.setStatus(p.message === 'Cancelled' ? 'Export cancelled' : ('Export failed: ' + p.message));
         statusEl.textContent = p.message === 'Cancelled' ? 'Cancelled' : ('Error: ' + p.message);
+        return;
+      } else {
+        return;
       }
+      const si = Math.max(0, stageIndex(stage));
+      const overall = clamp((si + local) / stageNames.length);
+      lastOverall = Math.max(lastOverall, overall);
+      statusEl.textContent = label + ' ' + Math.round(lastOverall * 100) + '%';
+      this.setProgress(lastOverall);
     });
     for (const part of parts) {
       const meta = await this.exportMetaForSource(part.sourcePath);
@@ -5642,7 +5827,8 @@ releaseFrameNav() {
       resolution: compressOpts ? compressOpts.resolution : 'origin',
       quality: compressOpts ? compressOpts.quality : 'low',
       gpu: compressOpts ? compressOpts.gpu : true,
-      duration: total
+      duration: total,
+      tools: this.exportTools()
     });
     unsub();
     this.state.exporting = false;
@@ -5917,27 +6103,44 @@ releaseFrameNav() {
       }
     };
     setTicks();
+    const extIds = this.enabledExtensionIds();
+    const stageNames = ['mux', ...extIds.map((id) => 'tool:' + id)];
+    if (compressOpts) stageNames.push('encode');
+    const stageIndex = (n) => stageNames.indexOf(n);
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
     let lastOverall = 0;
     const unsub = window.keycut.onExportProgress((p) => {
       const base = multiSpan < 1 ? curJob * multiSpan : 0;
+      let stage = null;
       let local = 0;
       let label = 'Muxing…';
       if (p.phase === 'cut') {
-        local = (compressOpts ? 0.1 : 0.7) * (p.total > 0 ? p.index / p.total : 0);
+        stage = 'mux';
+        local = p.total > 0 ? 0.9 * (p.index / p.total) : 0;
         label = 'Muxing…';
       } else if (p.phase === 'concat') {
-        local = compressOpts ? 0.1 : 1;
+        stage = 'mux';
+        local = 1;
         label = 'Muxing…';
+      } else if (p.phase === 'tool') {
+        stage = 'tool:' + p.id;
+        local = clamp01(p.progress != null ? p.progress : 0);
+        label = (p.label || 'Processing') + '…';
       } else if (p.phase === 'encode') {
-        local = 0.1 + 0.9 * (p.progress != null ? p.progress : 0);
+        stage = 'encode';
+        local = clamp01(p.progress != null ? p.progress : 0);
         label = 'Encoding…';
       } else if (p.phase === 'error') {
         this.setStatus('Export failed: ' + p.message);
         this.setProgress(null);
         setModalStatus('Error: ' + p.message);
         return;
+      } else {
+        return;
       }
-      lastOverall = Math.max(lastOverall, base + multiSpan * Math.min(1, local));
+      const si = Math.max(0, stageIndex(stage));
+      const jobLocal = (si + local) / stageNames.length;
+      lastOverall = Math.max(lastOverall, base + multiSpan * Math.min(1, jobLocal));
       setModalStatus(label + ' ' + Math.round(lastOverall * 100) + '%');
       this.setProgress(lastOverall);
     });
@@ -5964,7 +6167,8 @@ releaseFrameNav() {
         resolution: compressOpts ? compressOpts.resolution : null,
         quality: compressOpts ? compressOpts.quality : 'low',
         gpu: compressOpts ? compressOpts.gpu : true,
-        duration: jobDur > 0 ? jobDur : this.state.duration
+        duration: jobDur > 0 ? jobDur : this.state.duration,
+        tools: this.exportTools()
       });
       if (!(res && res.ok)) { ok = false; lastErr = res && res.error ? res.error : 'unknown error'; break; }
     }

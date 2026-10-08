@@ -91,5 +91,13 @@ contextBridge.exposeInMainWorld('keycut', {
     const listener = () => cb();
     ipcRenderer.on('app:request-close', listener);
     return () => ipcRenderer.removeListener('app:request-close', listener);
+  },
+
+  extList: () => ipcRenderer.invoke('ext:list'),
+  extDownload: (id) => ipcRenderer.invoke('ext:download', id),
+  onExtProgress: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('ext:progress', listener);
+    return () => ipcRenderer.removeListener('ext:progress', listener);
   }
 });
