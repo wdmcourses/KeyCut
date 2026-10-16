@@ -1267,7 +1267,6 @@ body.drag-cursor-ew-resize * { cursor: ew-resize !important; }
   opacity: 0;
   overflow: hidden;
   margin-top: 0;
-  transition: max-height .22s ease, opacity .18s ease, margin-top .22s ease;
 }
 .ext-item.open .ext-options {
   max-height: 220px;
