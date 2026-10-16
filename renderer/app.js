@@ -1364,6 +1364,7 @@ toggleSelectSegment(i) {
     }
     const mk = { id: ++this._markerSeq, t: mkT, name: 'part_' + (this.markers.length + 1), color: pickMarkerColor(this.markers.map((m) => m.color), this._lastRemovedMarkerColor) };
     this._lastRemovedMarkerColor = null;
+    if (app && app.pause) app.pause();
     this.markers.push(mk);
     this.needsRender = true;
     this.tick();
@@ -2076,6 +2077,13 @@ const app = {
   _concatDragLastY: null,
   _tlSeq: 0,
   _tlOpenReq: 0,
+  _lastEditedMarkerId: null,
+  _previewEventsBound: false,
+  _previewScrubbing: null,
+  _previewPendingSeek: null,
+  _previewRAF: null,
+  _previewPath: null,
+  _previewName: null,
 
   beginDragCursor(cursor = 'grabbing') {
     const cls = 'drag-cursor-' + cursor;
@@ -2128,12 +2136,18 @@ const app = {
     this.model.onRestoreState = (sel) => {
       const t = this.timeline;
       if (!t) return;
+      const prevMarkers = t.markers;
       t.selected = sel.selected ? sel.selected.slice() : null;
       t.selectedSet = sel.selectedSet ? new Set(sel.selectedSet) : null;
       t.selectedAnchor = sel.selectedAnchor != null ? sel.selectedAnchor : null;
       if (sel.markers) t.markers = sel.markers.map((m) => ({ id: m.id, t: m.t, name: m.name, color: m.color, off: !!m.off }));
       if (this._markerBubbleId != null && !t.markers.some((x) => x.id === this._markerBubbleId)) {
         this.hideMarkerBubble();
+      }
+      if (sel.markers && this._lastEditedMarkerId != null) {
+        const prev = prevMarkers.find((x) => x.id === this._lastEditedMarkerId);
+        const m = t.markers.find((x) => x.id === this._lastEditedMarkerId);
+        if (m && (!prev || prev.name !== m.name)) { this.centerMarker(m); this.markerBubble(m); }
       }
       t._lastBubbleId = null;
       t.needsRender = true;
@@ -2208,7 +2222,7 @@ const app = {
     $('marker-export').addEventListener('mousedown', (e) => e.preventDefault());
     $('marker-off').addEventListener('mousedown', (e) => e.preventDefault());
     $('marker-delete').addEventListener('mousedown', (e) => e.preventDefault());
-    $('marker-ok').addEventListener('click', () => this.hideMarkerBubble());
+    $('marker-ok').addEventListener('click', () => this.openMarkerPreview(this._markerBubbleId));
     $('marker-export').addEventListener('click', () => {
       const id = this._markerBubbleId;
       this.hideMarkerBubble();
@@ -2255,7 +2269,7 @@ const app = {
     document.addEventListener('click', (e) => {
       const t = e.target;
       if (!t || !t.closest) return;
-      if (t.closest('#find-bar') || t.closest('#marker-bubble') || t.closest('#export-modal') || t.closest('#help-modal') || t.closest('#convert-modal')) return;
+      if (t.closest('#find-bar') || t.closest('#marker-bubble') || t.closest('#export-modal') || t.closest('#preview-modal') || t.closest('#help-modal') || t.closest('#convert-modal')) return;
       if (t.closest('button')) {
         this.closeFind();
         this.hideMarkerBubble();
@@ -2269,6 +2283,7 @@ const app = {
 
     this.bindUI();
     this.bindVideo();
+    this.bindPreviewEvents();
     this.bindKeys();
     this.buildFileList();
     this.startSourceWatch();
@@ -3406,6 +3421,13 @@ guardTarget(t) {
 
   bindKeys() {
     window.addEventListener('keydown', (e) => {
+      const pv0 = $('preview-modal');
+      if (pv0 && !pv0.classList.contains('hidden')) {
+        if (e.code === 'Escape') { e.preventDefault(); this.closeMarkerPreview(); return; }
+        if (e.code === 'Space') { e.preventDefault(); this.togglePreviewPlay(); return; }
+        e.preventDefault();
+        return;
+      }
       if (e.target && e.target.tagName === 'INPUT') {
         const mod = e.ctrlKey || e.metaKey;
         const appHot = mod && !e.altKey && (e.code === 'KeyO' || e.code === 'KeyS' || e.code === 'KeyE' || e.code === 'KeyF');
@@ -3505,7 +3527,7 @@ guardTarget(t) {
       if (e.code === 'KeyW') { e.preventDefault(); this.closeFind(); this.toggleTimelinesPanel(); return; }
       if (e.code === 'KeyJ') { e.preventDefault(); this.closeFind(); this.concatVideos(); return; }
       if (e.code === 'KeyK') { e.preventDefault(); this.closeFind(); this.setKeys(); return; }
-      if (e.code === 'KeyM') { e.preventDefault(); this.timeline.addMarkerAt(this.state.cursor); return; }
+      if (e.code === 'KeyM') { e.preventDefault(); this.pause(); this.timeline.addMarkerAt(this.state.cursor); return; }
       if (e.code === 'KeyC') { e.preventDefault(); this.cancelStepPause(); this.cut(); return; }
       if (e.code === 'KeyX' || e.code === 'Delete' || e.code === 'Backspace') {
         if (this._markerBubbleId != null) {
@@ -3617,6 +3639,7 @@ guardTarget(t) {
 
   markerBubble(m) {
     this._markerBubbleId = m.id;
+    this._lastEditedMarkerId = m.id;
     this._markerOrigName = m.name;
     const inp = $('marker-name');
     inp.value = m.name;
@@ -3651,6 +3674,7 @@ guardTarget(t) {
         $('marker-name').value = this._markerOrigName;
       } else if (m && m.name !== this._markerOrigName) {
         this.markDirty();
+        this.model.snapshot();
       }
     }
     this._markerBubbleId = null;
@@ -3781,7 +3805,9 @@ guardTarget(t) {
     const keptPct = this.state.duration > 0 ? Math.round((kept / this.state.duration) * 100) : 0;
     const cuts = this.model.cuts.length - 1;
     const markers = (this.timeline && this.timeline.markers && this.timeline.markers.length) || 0;
+    const res = (this.state.width && this.state.height) ? `<span>Res <b>${this.state.width}x${this.state.height}</b></span>` : '';
     $('stats').innerHTML =
+      res +
       `<span>Cuts <b>${cuts}</b></span>` +
       (markers ? `<span>Markers <b>${markers}</b></span>` : '') +
       `<span>Kept <b>${fmtTime(kept, false)}</b> / ${fmtTime(this.state.duration, false)} <b>(${keptPct}%)</b></span>`;
@@ -3809,6 +3835,7 @@ guardTarget(t) {
     this.state.streams = meta.streams || null;
     this.state.cursor = 0;
     this.state.model = this.model;
+    this.$labelUpdate();
     this.updateTimeDisplay();
     this.refreshActiveKeys();
     this.timeline.setData({
@@ -4668,7 +4695,7 @@ frameDeleted(t) {
   },
 
   isModalOpen() {
-    return ['help-modal', 'export-modal', 'export-settings-modal', 'convert-modal', 'confirm-modal', 'task-modal', 'concat-modal'].some((id) => !$(id).classList.contains('hidden'));
+    return ['help-modal', 'export-modal', 'export-settings-modal', 'convert-modal', 'confirm-modal', 'task-modal', 'concat-modal', 'preview-modal'].some((id) => !$(id).classList.contains('hidden'));
   },
 
   isFileOpBusy() {
@@ -5167,6 +5194,7 @@ releaseFrameNav() {
     this.toggleTimelinesPanel(false);
     this.resetEditorToEmpty();
     if (this.compat) await this.compat.forgetAll();
+    await window.keycut.previewClear();
     this.refreshRecents();
     await this.fitInitialWindow();
     this.setStatus('Project closed');
@@ -5429,10 +5457,10 @@ releaseFrameNav() {
   },
 
   activeExtensionIds() {
+    const enabled = new Set(this.enabledExtensionIds());
     const items = this._extItems;
     if (!items || !items.length) return this.enabledExtensionIds();
-    const installed = new Set(items.filter((i) => i.installed).map((i) => i.id));
-    return this.enabledExtensionIds().filter((id) => installed.has(id));
+    return items.filter((i) => i.installed && enabled.has(i.id)).map((i) => i.id);
   },
 
   exportTools() {
@@ -5719,21 +5747,6 @@ releaseFrameNav() {
       reasonEl.classList.add('hidden');
     };
     if (timelines.length < 2) { setUnavailable('need at least 2 timelines'); return; }
-    const known = [];
-    let allKnown = true;
-    for (const t of timelines) {
-      const v = t.video || null;
-      if (!v || !v.w || !v.h) { allKnown = false; known.push(null); continue; }
-      known.push({ w: v.w, h: v.h, fps: v.fps || 0 });
-    }
-    if (allKnown) {
-      const base = known[0];
-      for (let i = 1; i < known.length; i++) {
-        const m = known[i];
-        if (m.w !== base.w || m.h !== base.h) { setUnavailable('files are of different formats'); return; }
-        if (base.fps && m.fps && Math.abs(m.fps - base.fps) / Math.max(base.fps, m.fps) > 0.1) { setUnavailable('files are of different formats'); return; }
-      }
-    }
     const files = [];
     for (const t of timelines) {
       let src = t.src;
@@ -5754,19 +5767,23 @@ releaseFrameNav() {
 
   async runProjectJoin(timelines, compressOpts) {
     const firstSrc = timelines[0] && timelines[0].src;
-    let allowed = compressOpts ? null : null;
+    let allowed = null;
+    let firstStreams = null;
     if (!compressOpts && firstSrc) {
       try {
         const meta = await window.keycut.probeVideo(firstSrc);
-        allowed = (meta && !meta.error) ? this.compatibleExportExts(meta.streams || null) : null;
+        if (meta && !meta.error) {
+          firstStreams = meta.streams || null;
+          allowed = this.compatibleExportExts(firstStreams);
+        }
       } catch {
         allowed = null;
       }
     }
     const srcExt = (firstSrc || '').match(/\.([^.\\/]+)$/)?.[1] || 'mkv';
-    const defaultExt = compressOpts ? 'mp4' : srcExt;
+    const defaultExt = compressOpts ? 'mp4' : window.KeyCutFormats.preferredLosslessExt(firstStreams, srcExt);
     const defaultName = (timelines[0].name || 'timeline').replace(/\.[^.]+$/, '') + '.' + defaultExt;
-    const outputPath = compressOpts ? await window.keycut.saveExportDialog(defaultName, true) : await this.pickLosslessOutput(defaultName, allowed, srcExt);
+    const outputPath = compressOpts ? await window.keycut.saveExportDialog(defaultName, true) : await this.pickLosslessOutput(defaultName, allowed, defaultExt);
     if (!outputPath) return;
     this.showTaskModal({ title: 'Export Project', message: 'Preparing…', indeterminate: true });
     try {
@@ -5807,8 +5824,7 @@ releaseFrameNav() {
     const statusEl = $('export-modal-status');
     $('export-modal-bar').querySelectorAll('.modal-tick').forEach((el) => el.remove());
     const clamp = (v) => Math.max(0, Math.min(1, v));
-    const extIds = this.activeExtensionIds();
-    const stageNames = ['join', ...extIds.map((id) => 'tool:' + id)];
+    const stageNames = ['join'];
     if (compressOpts) stageNames.push('compress');
     const stageIndex = (n) => stageNames.indexOf(n);
     const exportFill = $('export-modal-fill');
@@ -5884,8 +5900,9 @@ releaseFrameNav() {
       if (res && res.error === 'Cancelled') this.setStatus('Export cancelled');
       else this.setStatus('Export failed: ' + (res && res.error ? res.error : 'unknown error'));
     } else {
-      this.setStatus('Project exported: ' + outputPath);
-      this.showExportDone(outputPath);
+      const saved = (res && res.out) || outputPath;
+      this.setStatus('Project exported: ' + saved);
+      this.showExportDone(saved);
     }
   },
 
@@ -5966,47 +5983,7 @@ releaseFrameNav() {
 
   compatibleExportExts(streamsOverride) {
     const streams = streamsOverride || this.state.streams;
-    const v = (streams || []).find((s) => s.codec_type === 'video');
-    const a = (streams || []).find((s) => s.codec_type === 'audio');
-    const vcodec = v && v.codec_name ? String(v.codec_name).toLowerCase() : '';
-    const acodec = a && a.codec_name ? String(a.codec_name).toLowerCase() : '';
-    if (!vcodec && !acodec) return null;
-    const V = {
-      h264: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts', '3gp', 'f4v', 'avi'],
-      avc1: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts', '3gp', 'f4v', 'avi'],
-      hevc: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts'],
-      h265: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts'],
-      vp9: ['mp4', 'mkv', 'webm'],
-      av1: ['mp4', 'mkv', 'webm'],
-      vp8: ['mkv', 'webm'],
-      theora: ['mkv'],
-      mpeg4: ['mp4', 'mov', 'mkv', 'avi', '3gp'],
-      mpeg2video: ['mkv', 'ts', 'mts', 'm2ts', 'avi'],
-      mjpeg: ['mp4', 'mov', 'mkv', 'avi'],
-      wmv2: ['mkv', 'wmv'],
-      msmpeg4: ['mkv', 'avi'],
-      msmpeg4v2: ['mkv', 'avi'],
-      msmpeg4v3: ['mkv', 'avi']
-    };
-    const A = {
-      aac: ['mp4', 'mov', 'mkv', 'm4v', 'ts', 'mts', 'm2ts', '3gp', 'f4v', 'flv'],
-      mp3: ['mp4', 'mov', 'mkv', 'ts', 'mts', 'm2ts', 'avi'],
-      opus: ['mkv', 'webm', 'ts'],
-      vorbis: ['mkv', 'webm'],
-      ac3: ['mkv', 'ts', 'mts', 'm2ts', 'mov'],
-      pcm: ['mov', 'mkv', 'avi'],
-      pcm_s16le: ['mov', 'mkv', 'avi'],
-      pcm_s16be: ['mov', 'mkv', 'avi'],
-      pcm_s24le: ['mov', 'mkv', 'avi'],
-      pcm_bluray: ['mov', 'mkv'],
-      pcm_dvd: ['mov', 'mkv'],
-      mp2: ['mkv', 'ts', 'mts', 'm2ts'],
-      flac: ['mkv', 'mov'],
-      wmav2: ['mkv', 'wmv']
-    };
-    let allowed = V[vcodec] || null;
-    if (acodec && A[acodec] && allowed) allowed = allowed.filter((e) => A[acodec].includes(e));
-    return allowed;
+    return window.KeyCutFormats.compatibleExts(streams);
   },
 
   orderSourceFirst(allowed, srcExtOverride) {
@@ -6052,6 +6029,293 @@ releaseFrameNav() {
     }
     this.closeExportSettings();
     await this.runExports([{ segments: segs, out: outPath }], false, compressOpts);
+  },
+
+  previewCacheKey(segs) {
+    const src = String(this.state.source || '').replace(/\\/g, '/').toLowerCase();
+    const pts = segs.map(([a, b]) => a.toFixed(3) + ':' + b.toFixed(3)).join(',');
+    const vtb = this.state.videoTimebase != null ? this.state.videoTimebase : 0;
+    const thumb = this.state.hasThumbnail ? 1 : 0;
+    const streams = (this.state.streams || []).map((s) => s.index + ':' + s.codec_type + ':' + s.codec_name).join(',');
+    return src + '|' + vtb + '|' + thumb + '|' + streams + '|' + pts;
+  },
+
+  async openMarkerPreview(id) {
+    if (this.state.exporting) return;
+    if (this.state.sourceMissing) { this.setStatus('Locate the missing source file before previewing'); return; }
+    if (!this.state.source) return;
+    const m = this.timeline.markers.find((x) => x.id === id);
+    if (!m) return;
+    const markers = this.timeline.sortedMarkers();
+    let prev = 0;
+    for (const mm of markers) {
+      if (mm.id === m.id) break;
+      prev = mm.t;
+    }
+    const segs = clipRuns(this.model.keptRuns(), prev, m.t);
+    if (!segs.length) { this.setStatus('This part contains no kept content'); return; }
+    const ext = this.sourceExt().replace('.', '');
+    const target = await window.keycut.previewTarget(this.previewCacheKey(segs), ext);
+    const tmpPath = target && target.path;
+    if (!tmpPath) { this.setStatus('Preview unavailable'); return; }
+    if (target.exists) {
+      if (this.video && !this.video.paused) this.pause();
+      this.openPreviewPopup(tmpPath, m);
+      return;
+    }
+    if (this.compat) this.compat.stop();
+    this.state.exporting = true;
+    this._exportCancelled = false;
+    $('btn-export').disabled = true;
+    if (this.video && !this.video.paused) this.pause();
+    this.setStatus('Preparing preview…', true);
+    this.setProgress(0);
+    this.prepareExportModal();
+    $('export-modal').classList.remove('hidden');
+    this.closeFind();
+    $('export-modal-title').textContent = 'Preview';
+    $('export-modal-status').textContent = 'Preparing…';
+    $('export-cancel').style.display = '';
+    const finish = (statusText) => {
+      this.state.exporting = false;
+      this._exportCancelled = false;
+      $('btn-export').disabled = false;
+      this.syncExportButton();
+      this.setProgress(null);
+      this.setStatus(statusText || '');
+      $('export-modal').classList.add('hidden');
+    };
+    const fail = (statusText) => {
+      finish(statusText);
+      window.keycut.previewDeleteTmp(tmpPath).catch(() => {});
+      if (this.compat) this.compat.resume();
+    };
+    const unsub = window.keycut.onExportProgress((p) => {
+      if (p.phase === 'error') {
+        unsub();
+        fail(p.message === 'Cancelled' ? 'Preview cancelled' : ('Preview export failed: ' + p.message));
+        return;
+      }
+      if (p.phase === 'done' || p.phase === 'cleanup') {
+        if (this._exportCancelled) { unsub(); return; }
+        unsub();
+        finish('Preview ready');
+        this.openPreviewPopup(tmpPath, m);
+        return;
+      }
+      if (p.phase === 'cut' && p.total) {
+        this.setProgress((p.index / p.total) * 0.9);
+        $('export-modal-status').textContent = 'Exporting… ' + Math.round((p.index / p.total) * 100) + '%';
+        return;
+      }
+      if (p.phase === 'concat') { this.setProgress(1); return; }
+      if (p.progress != null) this.setProgress(p.progress);
+    });
+    try {
+      await window.keycut.exportStart({
+        sourcePath: this.state.source,
+        segments: segs,
+        outputPath: tmpPath,
+        videoTimebase: this.state.videoTimebase,
+        hasThumbnail: this.state.hasThumbnail,
+        streams: this.state.streams,
+        compress: false,
+        resolution: null,
+        quality: 'low',
+        gpu: true,
+        duration: segs.reduce((a, s) => a + Math.max(0, (s[1] || 0) - (s[0] || 0)), 0),
+        tools: []
+      });
+    } catch (err) {
+      unsub();
+      fail('Preview export failed: ' + (err && err.message ? err.message : 'unknown error'));
+    }
+  },
+
+  openPreviewPopup(tmpPath, marker) {
+    this._previewPath = tmpPath;
+    this._previewName = marker && marker.name ? marker.name : 'part';
+    const video = $('preview-video');
+    video.removeAttribute('src');
+    video.load();
+    video.src = toFileUrl(tmpPath);
+    $('preview-modal-title').textContent = 'Preview: ' + (marker && marker.name ? marker.name : 'part');
+    $('preview-play').innerHTML = PLAY_SVG;
+    $('preview-play').title = 'Play / Pause (Space)';
+    $('preview-time-current').textContent = '00:00:00.000';
+    $('preview-time-total').textContent = '00:00:00.000';
+    $('preview-progress-fill').style.width = '0%';
+    $('preview-scrubber').style.left = '0%';
+    this._previewScrubbing = null;
+    this._previewPendingSeek = null;
+    $('preview-modal').classList.remove('hidden');
+    video.play().catch(() => {});
+  },
+
+  bindPreviewEvents() {
+    if (this._previewEventsBound) return;
+    this._previewEventsBound = true;
+    const wrap = $('preview-progress-wrap');
+    const video = $('preview-video');
+    const playBtn = $('preview-play');
+    const closeBtn = $('preview-modal-close');
+    const modal = $('preview-modal');
+
+    playBtn.addEventListener('click', () => this.togglePreviewPlay());
+    $('preview-save-as').addEventListener('click', () => this.savePreviewAs());
+    closeBtn.addEventListener('click', () => this.closeMarkerPreview());
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this.closeMarkerPreview();
+    });
+
+    const fracFromX = (clientX) => {
+      const rect = wrap.getBoundingClientRect();
+      return rect.width > 0 ? Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) : 0;
+    };
+    const seekTo = (frac) => {
+      const dur = video.duration || 0;
+      if (dur <= 0) return;
+      const target = frac * dur;
+      if (video.seeking) { this._previewPendingSeek = target; return; }
+      try { video.currentTime = Math.min(target, dur - 1e-3); } catch {}
+    };
+    const scrubTo = (clientX) => {
+      const frac = fracFromX(clientX);
+      const dur = video.duration || 0;
+      const pct = (frac * 100) + '%';
+      $('preview-progress-fill').style.width = pct;
+      $('preview-scrubber').style.left = pct;
+      $('preview-time-current').textContent = fmtTime(frac * dur, true);
+      seekTo(frac);
+    };
+
+    wrap.addEventListener('pointerdown', (e) => {
+      if (!video.duration) return;
+      e.preventDefault();
+      this._previewScrubbing = { wasPlaying: !video.paused };
+      wrap.classList.add('scrubbing');
+      if (this._previewScrubbing.wasPlaying) video.pause();
+      try { wrap.setPointerCapture(e.pointerId); } catch {}
+      scrubTo(e.clientX);
+    });
+    wrap.addEventListener('pointermove', (e) => {
+      if (!this._previewScrubbing) return;
+      e.preventDefault();
+      scrubTo(e.clientX);
+    });
+    const endScrub = (e) => {
+      const st = this._previewScrubbing;
+      if (!st) return;
+      this._previewScrubbing = null;
+      wrap.classList.remove('scrubbing');
+      try { wrap.releasePointerCapture(e.pointerId); } catch {}
+      scrubTo(e.clientX);
+      if (st.wasPlaying) video.play().catch(() => {});
+    };
+    wrap.addEventListener('pointerup', endScrub);
+    wrap.addEventListener('pointercancel', endScrub);
+
+    video.addEventListener('click', () => this.togglePreviewPlay());
+    video.addEventListener('error', () => {
+      if (modal.classList.contains('hidden')) return;
+      if (!video.getAttribute('src')) return;
+      this.setStatus('This format cannot be previewed here');
+    });
+    video.addEventListener('loadedmetadata', () => {
+      $('preview-time-total').textContent = fmtTime(video.duration, true);
+      this.updatePreviewUI();
+    });
+    video.addEventListener('timeupdate', () => this.updatePreviewUI());
+    video.addEventListener('seeked', () => {
+      if (this._previewPendingSeek != null) {
+        const t = this._previewPendingSeek;
+        this._previewPendingSeek = null;
+        try { video.currentTime = t; } catch {}
+        return;
+      }
+      this.updatePreviewUI();
+    });
+    video.addEventListener('ended', () => {
+      playBtn.innerHTML = PLAY_SVG;
+      playBtn.title = 'Play / Pause (Space)';
+      this.previewStopRAF();
+      this.updatePreviewUI();
+    });
+    video.addEventListener('pause', () => {
+      playBtn.innerHTML = PLAY_SVG;
+      playBtn.title = 'Play / Pause (Space)';
+      this.previewStopRAF();
+    });
+    video.addEventListener('play', () => {
+      playBtn.innerHTML = PAUSE_SVG;
+      playBtn.title = 'Play / Pause (Space)';
+      this.previewStartRAF();
+    });
+  },
+
+  previewStartRAF() {
+    if (this._previewRAF) return;
+    const tick = () => {
+      this._previewRAF = null;
+      const video = $('preview-video');
+      if (!video || $('preview-modal').classList.contains('hidden') || video.paused) return;
+      this.updatePreviewUI();
+      this._previewRAF = requestAnimationFrame(tick);
+    };
+    this._previewRAF = requestAnimationFrame(tick);
+  },
+
+  previewStopRAF() {
+    if (this._previewRAF) { cancelAnimationFrame(this._previewRAF); this._previewRAF = null; }
+  },
+
+  togglePreviewPlay() {
+    const video = $('preview-video');
+    if (!video || !video.duration) return;
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+  },
+
+  updatePreviewUI() {
+    if (this._previewScrubbing) return;
+    const video = $('preview-video');
+    if (!video) return;
+    const cur = video.currentTime || 0;
+    const dur = video.duration || 0;
+    $('preview-time-current').textContent = fmtTime(cur, true);
+    if (dur > 0) $('preview-time-total').textContent = fmtTime(dur, true);
+    const pct = dur > 0 ? (cur / dur) * 100 : 0;
+    $('preview-progress-fill').style.width = pct + '%';
+    $('preview-scrubber').style.left = pct + '%';
+  },
+
+  closeMarkerPreview() {
+    this.previewStopRAF();
+    this._previewScrubbing = null;
+    this._previewPendingSeek = null;
+    const wrap = $('preview-progress-wrap');
+    if (wrap) wrap.classList.remove('scrubbing');
+    const video = $('preview-video');
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
+    $('preview-modal').classList.add('hidden');
+    if (this.compat) this.compat.resume();
+  },
+
+  async savePreviewAs() {
+    const from = this._previewPath;
+    if (!from) return;
+    const extRaw = (from.split('.').pop() || 'mp4').toLowerCase();
+    const ext = /^[a-z0-9]+$/.test(extRaw) ? extRaw : 'mp4';
+    const base = String(this._previewName || 'preview').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'preview';
+    const to = await window.keycut.previewSaveDialog(base + '.' + ext, ext);
+    if (!to) return;
+    const res = await window.keycut.copyFile(from, to);
+    if (res && res.ok) this.setStatus('Preview saved: ' + to);
+    else this.setStatus('Save failed: ' + (res && res.error ? res.error : 'unknown error'));
   },
 
   async exportParts(compressOpts) {
@@ -6228,6 +6492,7 @@ releaseFrameNav() {
         tools: this.exportTools()
       });
       if (!(res && res.ok)) { ok = false; lastErr = res && res.error ? res.error : 'unknown error'; break; }
+      if (res.out) job.out = res.out;
     }
 
     unsub();

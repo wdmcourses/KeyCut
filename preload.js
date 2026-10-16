@@ -100,5 +100,11 @@ contextBridge.exposeInMainWorld('keycut', {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('ext:progress', listener);
     return () => ipcRenderer.removeListener('ext:progress', listener);
-  }
+  },
+
+  previewTarget: (key, extension) => ipcRenderer.invoke('preview:target', { key, extension }),
+  previewDeleteTmp: (p) => ipcRenderer.invoke('file:delete', p),
+  previewClear: () => ipcRenderer.invoke('preview:clear'),
+  previewSaveDialog: (defaultName, ext) => ipcRenderer.invoke('dialog:savePreview', defaultName, ext),
+  copyFile: (from, to) => ipcRenderer.invoke('file:copy', { from, to })
 });

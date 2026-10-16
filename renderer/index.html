@@ -93,8 +93,8 @@
           <div class="btn-group btn-group--fill">
             <button id="marker-delete" class="btn btn--xs btn--block btn--danger" type="button" title="Delete Marker">Del</button>
             <button id="marker-off" class="btn btn--xs btn--block btn--danger" type="button" title="Disable this part for export">Off</button>
+            <button id="marker-ok" class="btn btn--xs btn--block btn--accent" type="button">Preview</button>
             <button id="marker-export" class="btn btn--xs btn--block btn--success" type="button" title="Export this part to a File">Export</button>
-            <button id="marker-ok" class="btn btn--xs btn--block btn--primary" type="button">Ok</button>
           </div>
           <div id="marker-bubble-arrow"></div>
         </div>
@@ -159,6 +159,33 @@
       <div class="btn-group btn-group--end">
         <button id="export-cancel" class="btn btn--sm btn--danger" style="display:none" title="Cancel Export">Cancel</button>
         <button id="export-done-close" class="btn btn--sm" style="display:none" title="Close (Enter)">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="preview-modal" class="modal hidden">
+    <div id="preview-modal-card" class="modal-card">
+      <div id="preview-modal-head">
+        <div id="preview-modal-title" class="modal-title">Preview</div>
+        <button id="preview-save-as" class="btn btn--sm" title="Save Preview As…">Save As</button>
+      </div>
+      <div id="preview-video-wrap" class="preview-video-wrap">
+        <video id="preview-video" preload="auto"></video>
+      </div>
+      <div id="preview-controls" class="preview-controls">
+        <div id="preview-progress-wrap" class="preview-progress-wrap">
+          <div class="preview-progress-track">
+            <div id="preview-progress-fill" class="preview-progress-fill"></div>
+          </div>
+          <div id="preview-scrubber" class="preview-scrubber"></div>
+        </div>
+        <div class="preview-controls-row">
+          <span id="preview-time-clock" class="preview-time-chip"><span id="preview-time-current">00:00:00.000</span><span class="sep">/</span><span id="preview-time-total">00:00:00.000</span></span>
+          <button id="preview-play" class="icon-btn icon-btn--round icon-btn--lg icon-btn--primary" title="Play / Pause (Space)">
+            <svg viewBox="0 0 24 24" width="17" height="17"><path d="M8.5 6 L19 12 L8.5 18 Z" fill="currentColor" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="preview-modal-close" class="btn btn--sm" title="Close (Esc)">Close</button>
+        </div>
       </div>
     </div>
   </div>
@@ -370,6 +397,7 @@
     </div>
   </div>
 
+  <script src="../lib/formats.js"></script>
   <script src="filelist.js"></script>
   <script src="compatplayer.js"></script>
   <script src="app.js"></script>

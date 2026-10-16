@@ -104,9 +104,11 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 1200));
   check('project opened, active = timeline 1', (await activeId()) === 1);
 
-  console.log('[0a] window title follows KeyCut | project | timeline');
+  console.log('[0a] window title follows KeyCut | project | timeline; resolution lives in the stats row');
   const title0 = await js(`window.__app._titleRaw`);
-  check('title = "KeyCut | proj.kc | test.mp4"', title0 === 'KeyCut | proj.kc | test.mp4', JSON.stringify(title0));
+  check('title = "KeyCut | proj.kc | test.mp4" (no resolution)', title0 === 'KeyCut | proj.kc | test.mp4', JSON.stringify(title0));
+  const stats0 = await js(`(() => { const el = document.querySelector('#stats'); return el ? el.textContent : ''; })()`);
+  check('stats row shows "Res 640x360"', /Res\s*640x360/.test(stats0), JSON.stringify(stats0));
 
   console.log('[0b] loadPlacedVideo (Set keys insert) does not resize the window');
   await js(`(() => { const A = window.__app; A.__fitCalls = 0; const o = A.fitWindowToVideo.bind(A); A.fitWindowToVideo = async function(){ this.__fitCalls++; return o(); }; return true; })()`);

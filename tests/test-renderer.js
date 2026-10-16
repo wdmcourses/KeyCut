@@ -143,7 +143,7 @@ app.whenReady().then(async () => {
   console.log('[5] export via IPC (cut+concat+cleanup)');
   const res = await js(`window.keycut.exportStart({sourcePath:'${src}', segments:[[0,3],[5,6]], outputPath:'${OUT.replace(/\\/g, '\\\\')}'})`);
   check('export ok', !!(res && res.ok));
-  check('tmp cleaned', !fs.existsSync(TMP));
+  check('tmp cleaned', !fs.existsSync(TMP) || fs.readdirSync(TMP).length === 0);
   const durOut = await new Promise((res2) => {
     const { spawn } = require('child_process');
     const p = spawn(FF, ['-hide_banner', '-i', OUT], { windowsHide: true });

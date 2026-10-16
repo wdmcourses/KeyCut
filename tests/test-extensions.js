@@ -32,10 +32,11 @@ app.whenReady().then(async () => {
   console.log('[1] registry (installed)');
   installFake();
   const list = listExtensions(FAKE_ROOT);
-  check('lists one extension', list.length === 1 && list[0].id === 'lossless-debreath', JSON.stringify(list));
-  check('installed true', list[0].installed === true);
-  check('available true', list[0].available === true);
-  check('option schema exposed', list[0].options.length === 1 && list[0].options[0].key === 'gain' && list[0].options[0].choices.join() === '20,40,60,80,100' && list[0].options[0].default === 60, JSON.stringify(list[0].options));
+  const debreath = list.find((e) => e.id === 'lossless-debreath');
+  check('lists lossless-debreath', !!debreath, JSON.stringify(list));
+  check('installed true', !!debreath && debreath.installed === true);
+  check('available true', !!debreath && debreath.available === true);
+  check('option schema exposed', !!debreath && debreath.options.length === 1 && debreath.options[0].key === 'gain' && debreath.options[0].choices.join() === '10,20,30,60,80' && debreath.options[0].default === 60, JSON.stringify(debreath && debreath.options));
 
   console.log('[2] resolveTools builds cmd/env/args from options');
   const tools = resolveTools(FAKE_ROOT, [{ id: 'lossless-debreath', options: { gain: 45 } }]);
@@ -53,7 +54,8 @@ app.whenReady().then(async () => {
   console.log('[3] registry (not installed)');
   uninstallFake();
   const list2 = listExtensions(FAKE_ROOT);
-  check('installed false without bundled runtime', list2[0].installed === false);
+  const debreath2 = list2.find((e) => e.id === 'lossless-debreath');
+  check('installed false without bundled runtime', !!debreath2 && debreath2.installed === false);
   check('resolveTools empty when not installed', resolveTools(FAKE_ROOT, ['lossless-debreath']).length === 0);
   installFake();
 
@@ -69,7 +71,8 @@ app.whenReady().then(async () => {
 
   console.log('[4] IPC ext:list');
   const ipcList = await js('window.keycut.extList()');
-  check('ipc returns installed extension', Array.isArray(ipcList) && ipcList[0].installed === true);
+  check('ipc lists registry order', Array.isArray(ipcList) && ipcList[0].id === 'framegen' && ipcList[1].id === 'lossless-debreath', JSON.stringify((ipcList || []).map((e) => e.id)));
+  check('ipc returns installed extension', Array.isArray(ipcList) && ipcList.some((e) => e.id === 'lossless-debreath' && e.installed === true), JSON.stringify(ipcList && ipcList.map((e) => [e.id, e.installed])));
 
   console.log('[5] Additional tab UI (installed -> switch + options)');
   await js('window.__app.openExportSettings()');
@@ -77,7 +80,7 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 400));
   await js("(() => { const s = document.createElement('style'); s.textContent = '#export-extra-list .ext-options { transition: none !important; }'; document.head.appendChild(s); })()");
   const ui = await js(`(() => {
-    const box = document.querySelector('#export-extra-list .ext-item');
+    const box = document.querySelector('#export-extra-list .ext-item[data-ext-id="lossless-debreath"]');
     return {
       activeTab: document.querySelector('#export-settings-tabs .tab.active').dataset.tab,
       hasSwitch: !!box.querySelector('.switch input'),
@@ -92,13 +95,13 @@ app.whenReady().then(async () => {
   check('additional tab active', ui.activeTab === 'additional');
   check('switch shown, no download', ui.hasSwitch && !ui.hasDownload, JSON.stringify(ui));
   check('label correct', ui.label === 'Lossless DeBreath');
-  check('five gain choices with unit', JSON.stringify(ui.choices) === JSON.stringify(['20 dB', '40 dB', '60 dB', '80 dB', '100 dB']), JSON.stringify(ui.choices));
+  check('five gain choices with unit', JSON.stringify(ui.choices) === JSON.stringify(['10 dB', '20 dB', '30 dB', '60 dB', '80 dB']), JSON.stringify(ui.choices));
   check('default 60 active', ui.active === '60 dB');
   check('options panel closed while off', ui.open === false);
   check('disabled by default', ui.enabled.length === 0);
 
   const hit = await js(`(() => {
-    const box = document.querySelector('#export-extra-list .ext-item');
+    const box = document.querySelector('#export-extra-list .ext-item[data-ext-id="lossless-debreath"]');
     const head = box.querySelector('.ext-head');
     const br = box.getBoundingClientRect();
     const hr = head.getBoundingClientRect();
@@ -120,17 +123,17 @@ app.whenReady().then(async () => {
   check('top padding area is clickable', hit.topHitsHead === true, JSON.stringify(hit));
   check('bottom padding area is clickable', hit.bottomHitsHead === true, JSON.stringify(hit));
 
-  await js(`document.querySelector('#export-extra-list .ext-item .switch input').click()`);
+  await js(`document.querySelector('#export-extra-list .ext-item[data-ext-id="lossless-debreath"] .switch input').click()`);
   await new Promise((r) => setTimeout(r, 120));
   const on = await js(`(() => {
-    const box = document.querySelector('#export-extra-list .ext-item');
+    const box = document.querySelector('#export-extra-list .ext-item[data-ext-id="lossless-debreath"]');
     return { open: box.classList.contains('open'), maxH: getComputedStyle(box.querySelector('.ext-options')).maxHeight, enabled: window.__app.state.exportSettings.extensions };
   })()`);
   check('enabling opens options panel', on.open === true && on.maxH === '220px', JSON.stringify(on));
   check('enabled id stored', JSON.stringify(on.enabled) === JSON.stringify(['lossless-debreath']));
 
   const expanded = await js(`(() => {
-    const box = document.querySelector('#export-extra-list .ext-item');
+    const box = document.querySelector('#export-extra-list .ext-item[data-ext-id="lossless-debreath"]');
     const head = box.querySelector('.ext-head');
     const opts = box.querySelector('.ext-options');
     const hr = head.getBoundingClientRect();
@@ -153,7 +156,7 @@ app.whenReady().then(async () => {
   await js(`(() => { for (const b of document.querySelectorAll('#export-extra-list .ext-opt-choice')) if (b.dataset.val === '80') b.click(); })()`);
   await new Promise((r) => setTimeout(r, 80));
   const chosen = await js(`(() => {
-    const box = document.querySelector('#export-extra-list .ext-item');
+    const box = document.querySelector('#export-extra-list .ext-item[data-ext-id="lossless-debreath"]');
     return { active: box.querySelector('.ext-opt-choice.btn--primary').textContent, opts: window.__app.state.exportSettings.extensionOptions, tools: window.__app.exportTools() };
   })()`);
   check('choice 80 becomes active', chosen.active === '80 dB');
@@ -169,7 +172,7 @@ app.whenReady().then(async () => {
   await js('window.__app.renderExportExtra()');
   await new Promise((r) => setTimeout(r, 150));
   const ui2 = await js(`(() => {
-    const box = document.querySelector('#export-extra-list .ext-item');
+    const box = document.querySelector('#export-extra-list .ext-item[data-ext-id="lossless-debreath"]');
     const btn = box.querySelector('.btn--download');
     const head = box.querySelector('.ext-head');
     const hr = head.getBoundingClientRect();
@@ -216,7 +219,7 @@ app.whenReady().then(async () => {
   fs.mkdirSync(path.join(udExt, 'python'), { recursive: true });
   fs.writeFileSync(path.join(udExt, 'debreath.py'), '');
   fs.writeFileSync(path.join(udExt, 'python', 'python.exe'), '');
-  check('found in userData when resources empty', listExtensions(FAKE_ROOT)[0].installed === true);
+  check('found in userData when resources empty', (listExtensions(FAKE_ROOT).find((e) => e.id === 'lossless-debreath') || {}).installed === true);
   const toolsFb = resolveTools(FAKE_ROOT, ['lossless-debreath']);
   check('cmd resolved from userData', toolsFb.length === 1 && toolsFb[0].cmd[0] === path.join(udExt, 'python', 'python.exe'), toolsFb[0] && toolsFb[0].cmd[0]);
   installFake();

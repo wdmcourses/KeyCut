@@ -2,9 +2,11 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { registerIpc } = require('./lib/ipc');
+const { cleanupSession, pruneStale } = require('./lib/tmp');
 
 const APP_ROOT = path.join(__dirname);
-const TMP_DIR = path.join(app.getPath('temp'), 'keycut');
+const TMP_ROOT = path.join(app.getPath('temp'), 'keycut');
+const TMP_DIR = path.join(TMP_ROOT, String(process.pid));
 
 
 
@@ -125,8 +127,17 @@ app.whenReady().then(() => {
     }
     return { ok: false, error: lastErr ? lastErr.message : 'Failed to delete file' };
   });
+  ipcMain.handle('file:copy', async (_e, { from, to } = {}) => {
+    if (!from || !to) return { ok: false, error: 'Missing path' };
+    try {
+      await fs.promises.copyFile(from, to);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
   registerIpc(() => mainWindow, APP_ROOT, TMP_DIR);
-  cleanupTmp();
+  pruneStaleTmp();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -134,20 +145,11 @@ app.whenReady().then(() => {
 });
 
 function cleanupTmp() {
-  try {
-    if (!fs.existsSync(TMP_DIR)) return;
-    for (const f of fs.readdirSync(TMP_DIR)) {
-      const p = path.join(TMP_DIR, f);
-      for (let i = 0; i < 4; i++) {
-        try {
-          fs.rmSync(p, { recursive: true, force: true });
-          break;
-        } catch {
-          if (i < 3) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150 * (i + 1));
-        }
-      }
-    }
-  } catch {}
+  cleanupSession(TMP_DIR, TMP_ROOT);
+}
+
+function pruneStaleTmp() {
+  pruneStale(TMP_ROOT, process.pid);
 }
 
 app.on('will-quit', () => {
