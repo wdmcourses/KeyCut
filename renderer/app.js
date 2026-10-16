@@ -1360,7 +1360,6 @@ toggleSelectSegment(i) {
     const mkT = this.markerTimeAt(x);
     const duplicate = this.markers.some((m) => Math.abs(m.t - mkT) < 1e-6);
     if (duplicate) {
-      this.model.snapshot();
       return;
     }
     const mk = { id: ++this._markerSeq, t: mkT, name: 'part_' + (this.markers.length + 1), color: pickMarkerColor(this.markers.map((m) => m.color), this._lastRemovedMarkerColor) };
@@ -3090,6 +3089,7 @@ const app = {
     this.updatePlaceholder();
     this.$labelUpdate();
     this.updateTimeDisplay();
+    this.updateStats();
     this.renderTimelines();
   },
 
@@ -3774,6 +3774,7 @@ guardTarget(t) {
   },
 
   updateStats() {
+    if (!(this.state.duration > 0)) { $('stats').innerHTML = ''; return; }
     const runs = this.exportableRuns();
     let kept = 0;
     for (const [s, e] of runs) kept += e - s;
@@ -5398,10 +5399,11 @@ releaseFrameNav() {
   },
 
   setExportQuality(q) {
+    const changed = this.state.exportSettings.quality !== q;
     this.state.exportSettings.quality = q;
     this.syncExportQualityUI();
     this.syncExportGpuUI();
-    this.markDirty();
+    if (changed) this.markDirty();
   },
 
   syncExportQualityUI() {
@@ -5445,7 +5447,9 @@ releaseFrameNav() {
 
   setExtensionOption(id, key, value) {
     const all = this.state.exportSettings.extensionOptions || (this.state.exportSettings.extensionOptions = {});
-    all[id] = Object.assign({}, all[id]);
+    const cur = all[id] || {};
+    if (cur[key] === value) return;
+    all[id] = Object.assign({}, cur);
     all[id][key] = value;
     this.markDirty();
   },
@@ -5563,11 +5567,12 @@ releaseFrameNav() {
   },
 
   setExportResolution(res) {
+    const changed = this.state.exportSettings.resolution !== res;
     this.state.exportSettings.resolution = res;
     for (const b of document.querySelectorAll('.res-opt')) {
       b.classList.toggle('btn--primary', b.dataset.res === res);
     }
-    this.markDirty();
+    if (changed) this.markDirty();
   },
 
   async doExport() {

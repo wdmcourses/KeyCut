@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
+const FF = process.env.KEYCUT_FFMPEG || path.join(ROOT, 'vendor', 'ffmpeg', process.platform, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
 const fs = require('fs');
 const { spawnSync } = require('child_process');
 const { registerIpc } = require('../lib/ipc');
@@ -15,8 +16,7 @@ const TMP = path.join(DIR, 'rt_tmp');
 function makeFixture() {
   if (!fs.existsSync(SRC)) {
     fs.mkdirSync(DIR, { recursive: true });
-    const ff = process.env.KEYCUT_FFMPEG || 'ffmpeg';
-    const res = spawnSync(ff, [
+    const res = spawnSync(FF, [
       '-y', '-v', 'error',
       '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=10',
       '-f', 'lavfi', '-i', 'sine=frequency=440:duration=10',
@@ -146,7 +146,7 @@ app.whenReady().then(async () => {
   check('tmp cleaned', !fs.existsSync(TMP));
   const durOut = await new Promise((res2) => {
     const { spawn } = require('child_process');
-    const p = spawn('D:/Soft/portable/ffmpeg/ffmpeg.exe', ['-hide_banner', '-i', OUT], { windowsHide: true });
+    const p = spawn(FF, ['-hide_banner', '-i', OUT], { windowsHide: true });
     let e = '';
     p.stderr.on('data', (d) => { e += d; });
     p.on('close', () => {
