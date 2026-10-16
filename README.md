@@ -27,6 +27,7 @@ output keeps the original quality and the whole operation is fast.</p>
 - Split, delete, restore and merge segments directly on the timeline; resize edges, multi-select
 - Optional compression: low, mid, high presets with resolution presets – Origin / 720p / 1080p / 1440p / 2160p
 - Optional DeBreath: lossless removal of breaths (inhalations) from the video's audio track
+- Optional Frame Interpolation (smoothing): raise a clip to 60 / 120 fps with neural frame interpolation
 - Timeline with audio waveform, keyframe snapping, zoom and frame stepping
 - Set keys: re-key a clip at 2 / 6 / 10 keyframes per second for frame-level precision
 
